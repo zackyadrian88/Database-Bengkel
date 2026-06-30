@@ -1,29 +1,23 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    protected $connection = 'mongodb';
+
     public function up()
     {
-        Schema::create('kendaraans', function (Blueprint $table) {
-            // Primary key khusus bernama id_kendaraan
-            $table->id('id_kendaraan');
-
-            // Kolom data pelanggan
-            $table->string('nama_pelanggan');
-            $table->string('nomor_polisi');
-            $table->string('merk_kendaraan');
-
-            // Timestamps otomatis membuat kolom 'created_at' dan 'updated_at'
-            $table->timestamps();
+        Schema::connection('mongodb')->create('kendaraans', function ($collection) {
+            $collection->index('created_at');
+            $collection->index('nama_pelanggan');
+            $collection->index('nomor_polisi');
         });
     }
 
     public function down()
     {
-        Schema::dropIfExists('kendaraans');
+        Schema::connection('mongodb')->dropIfExists('kendaraans');
     }
 };

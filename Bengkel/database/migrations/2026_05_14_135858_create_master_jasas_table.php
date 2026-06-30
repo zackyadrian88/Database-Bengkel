@@ -1,26 +1,21 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    protected $connection = 'mongodb';
+
     public function up()
     {
-        Schema::create('master_jasas', function (Blueprint $table) {
-            $table->id(); // Memakai nama default 'id'
-
-            $table->string('nama_layanan');
-            $table->decimal('biaya_standar', 15, 2);
-            $table->integer('id_mekanik_default')->default(1);
-
-            $table->timestamps();
+        Schema::connection('mongodb')->create('master_jasas', function ($collection) {
+            $collection->index('nama_layanan');
         });
     }
 
     public function down()
     {
-        Schema::dropIfExists('master_jasas');
+        Schema::connection('mongodb')->dropIfExists('master_jasas');
     }
 };

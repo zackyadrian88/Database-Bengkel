@@ -82,14 +82,15 @@
             const res = await fetch(`${API}/data-gudang`); const data = await res.json();
             document.getElementById('tableGudang').innerHTML = data.map(p => {
                 let badge = p.stok > 10 ? 'bg-[#BBF7D0] text-[#15803D]' : (p.stok > 0 ? 'bg-[#FED7AA] text-[#C2410C]' : 'bg-[#FEF2F2] text-[#EF4444]');
+                const shortId = p._id.slice(-6).toUpperCase();
                 return `
                 <tr class="hover:bg-gray-50 transition-colors">
-                    <td class="px-6 py-4 font-mono text-gray-500 text-center">#${p.id_sparepart}</td>
+                    <td class="px-6 py-4 font-mono text-gray-500 text-center">#${shortId}</td>
                     <td class="px-6 py-4 font-semibold text-gray-800">${p.nama_sparepart}</td>
                     <td class="px-6 py-4 font-mono text-gray-700">Rp ${parseInt(p.harga).toLocaleString('id-ID')}</td>
                     <td class="px-6 py-4"><span class="px-3 py-1 rounded-pill text-xs font-semibold ${badge}">${p.stok} Unit</span></td>
                     <td class="px-6 py-4 text-center">
-                        <button type="button" onclick="bukaRestockCepat(${p.id_sparepart}, '${p.nama_sparepart}')" class="text-primary hover:text-primaryHover transition-colors">
+                        <button type="button" onclick="bukaRestockCepat('${p._id}', '${p.nama_sparepart}')" class="text-primary hover:text-primaryHover transition-colors">
                             <span class="material-symbols-outlined">add_circle</span>
                         </button>
                     </td>
@@ -110,7 +111,7 @@
     }
 
     async function prosesRestockCepat() {
-        const p = { id_sparepart: parseInt(document.getElementById('qIdPart').value), tambah_stok: parseInt(document.getElementById('qTambahStok').value) };
+        const p = { id_sparepart: document.getElementById('qIdPart').value, tambah_stok: parseInt(document.getElementById('qTambahStok').value) };
         const res = await fetch(`${API}/restock-barang`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) });
         if(res.ok) { alertMsg('msgRestockQuick', 'Stok ditambah!'); loadGudang(); setTimeout(() => closeModal('restockQuickModal'), 1000); }
     }

@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 use App\Models\MasterJasa;
 use App\Models\Sparepart;
 
@@ -14,11 +13,9 @@ class BengkelSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. KOSONGKAN TABEL SEBELUM MENGISI (Mencegah data ganda)
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;'); // Matikan cek kunci sebentar
-        MasterJasa::truncate();
-        Sparepart::truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        // 1. KOSONGKAN COLLECTION SEBELUM MENGISI (Mencegah data ganda)
+        MasterJasa::query()->delete();
+        Sparepart::query()->delete();
 
         // 2. DATA KATALOG LAYANAN (STANDAR AHASS)
         $layanan = [

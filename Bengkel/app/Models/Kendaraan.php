@@ -1,9 +1,20 @@
 <?php
-namespace App\Models;
-use Illuminate\Database\Eloquent\Model;
 
-class Kendaraan extends Model {
-    protected $table = 'kendaraans';
-    protected $primaryKey = 'id_kendaraan';
-    protected $guarded = []; // Mengizinkan semua input masuk
+namespace App\Models;
+
+use MongoDB\Laravel\Eloquent\Model;
+
+class Kendaraan extends Model
+{
+    protected $connection = 'mongodb';
+    protected $collection = 'kendaraans';
+    protected $guarded = [];
+
+    /**
+     * Relasi: Satu kendaraan memiliki banyak servis
+     */
+    public function servis()
+    {
+        return $this->hasMany(Servis::class, 'kendaraan_id', '_id');
+    }
 }

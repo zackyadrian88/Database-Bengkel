@@ -1,28 +1,23 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    protected $connection = 'mongodb';
+
     public function up()
     {
-        Schema::create('spareparts', function (Blueprint $table) {
-            $table->id('id_sparepart');
-
-            $table->string('nama_sparepart');
-            // Decimal dengan 15 digit total, 2 digit di belakang koma (untuk uang)
-            $table->decimal('harga', 15, 2);
-            $table->integer('stok');
-            $table->string('jenis_sparepart')->default('Umum');
-
-            $table->timestamps();
+        Schema::connection('mongodb')->create('spareparts', function ($collection) {
+            $collection->index('nama_sparepart');
+            $collection->index('stok');
+            $collection->index('jenis_sparepart');
         });
     }
 
     public function down()
     {
-        Schema::dropIfExists('spareparts');
+        Schema::connection('mongodb')->dropIfExists('spareparts');
     }
 };

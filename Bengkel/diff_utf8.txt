@@ -1,0 +1,1455 @@
+diff --git a/Bengkel/app/Http/Controllers/BengkelController.php b/Bengkel/app/Http/Controllers/BengkelController.php
+index a1fbf17..dc636b3 100644
+--- a/Bengkel/app/Http/Controllers/BengkelController.php
++++ b/Bengkel/app/Http/Controllers/BengkelController.php
+@@ -7,78 +7,150 @@
+ use App\Models\MasterJasa;
+ use App\Models\Servis;
+ use App\Models\Sparepart;
+-use App\Models\DetailServis;
+-use Illuminate\Support\Facades\DB;
+-use Illuminate\Support\Facades\Schema;
+ 
+ class BengkelController extends Controller
+ {
+     // --- KIOS ANTRIAN ---
+-    public function antrianSekarang() {
+-        return response()->json(['antrian_sekarang' => Kendaraan::whereDate('created_at', today())->count()]);
++    public function antrianSekarang()
++    {
++        return response()->json([
++            'antrian_sekarang' => Kendaraan::whereDate('created_at', today())->count()
++        ]);
+     }
+ 
+-    public function ambilAntrian(Request $request) {
++    public function ambilAntrian(Request $request)
++    {
+         $k = Kendaraan::create($request->all());
+ 
+         // Hitung total urutan hari ini sebagai referensi nomor tiket live untuk pelanggan
+         $urutanHariIni = Kendaraan::whereDate('created_at', today())->count();
+ 
+         return response()->json([
+-            'id_kendaraan' => $k->id_kendaraan ?? $k->id,
++            'id_kendaraan' => (string) $k->_id,
+             'urutan'       => $urutanHariIni
+         ]);
+     }
+ 
+     // --- REAL-TIME DASHBOARD STATS ---
+-    public function dashboardStats() {
++    public function dashboardStats()
++    {
+         $hariIni = today();
+ 
++        // Hitung total nota hari ini
++        $servisHariIni = Servis::whereDate('created_at', $hariIni)->get();
++
++        $totalBiayaJasa = $servisHariIni->sum('biaya_jasa');
++        $totalSubtotalParts = 0;
++        $totalPartTerpasang = 0;
++
++        foreach ($servisHariIni as $s) {
++            $parts = $s->detail_parts ?? [];
++            foreach ($parts as $p) {
++                $totalSubtotalParts += $p['subtotal'] ?? 0;
++                $totalPartTerpasang += $p['jumlah'] ?? 0;
++            }
++        }
++
+         $stats = [
+-            'total_nota'         => Servis::whereDate('created_at', $hariIni)->count(),
+-            'total_pendapatan'   => (int)(Servis::whereDate('created_at', $hariIni)->sum('biaya_jasa') + DetailServis::whereDate('created_at', $hariIni)->sum('subtotal')),
+-            'part_terpasang'     => (int)DetailServis::whereDate('created_at', $hariIni)->sum('jumlah'),
++            'total_nota'         => $servisHariIni->count(),
++            'total_pendapatan'   => (int)($totalBiayaJasa + $totalSubtotalParts),
++            'part_terpasang'     => (int)$totalPartTerpasang,
+             'stok_menipis_count' => Sparepart::where('stok', '<=', 5)->count(),
+-            'stok_menipis_items' => Sparepart::where('stok', '<=', 5)->get(),
++            'stok_menipis_items' => Sparepart::where('stok', '<=', 5)->get()->map(function ($item) {
++                return [
++                    '_id'            => (string) $item->_id,
++                    'nama_sparepart' => $item->nama_sparepart,
++                    'stok'           => $item->stok,
++                ];
++            }),
+         ];
+ 
+-        $stats['recent_logs'] = Servis::leftJoin('kendaraans', 'servis.id_kendaraan', '=', 'kendaraans.id_kendaraan')
+-            ->select('servis.*', 'kendaraans.nama_pelanggan', 'kendaraans.nomor_polisi', 'kendaraans.merk_kendaraan')
+-            ->orderBy('servis.created_at', 'desc')
+-            ->limit(5)
++        // Recent logs — ambil 5 servis terakhir dengan relasi kendaraan
++        $recentServis = Servis::orderBy('created_at', 'desc')->limit(5)->get();
++        $stats['recent_logs'] = $recentServis->map(function ($log) {
++            $kendaraan = $log->kendaraan; // via relasi belongsTo
++
++            $subtotalParts = 0;
++            foreach ($log->detail_parts ?? [] as $p) {
++                $subtotalParts += $p['subtotal'] ?? 0;
++            }
++
++            return [
++                '_id'             => (string) $log->_id,
++                'id_servis'       => (string) $log->_id,
++                'kendaraan_id'    => (string) $log->kendaraan_id,
++                'id_mekanik'      => $log->id_mekanik,
++                'jenis_servis'    => $log->jenis_servis,
++                'biaya_jasa'      => $log->biaya_jasa,
++                'created_at'      => $log->created_at,
++                'nama_pelanggan'  => $kendaraan->nama_pelanggan ?? null,
++                'nomor_polisi'    => $kendaraan->nomor_polisi ?? null,
++                'merk_kendaraan'  => $kendaraan->merk_kendaraan ?? null,
++                'grand_total'     => (int)($log->biaya_jasa + $subtotalParts),
++            ];
++        });
++
++        // Active pits — 3 servis terakhir (tanpa tabel mekaniks)
++        $stats['active_pits'] = Servis::orderBy('created_at', 'desc')
++            ->limit(3)
+             ->get()
+-            ->each(function ($log) {
+-                $log->grand_total = $log->biaya_jasa + DetailServis::where('id_servis', $log->id_servis)->sum('subtotal');
++            ->map(function ($s) {
++                $kendaraan = $s->kendaraan;
++                return [
++                    'id_mekanik'      => $s->id_mekanik,
++                    'merk_kendaraan'  => $kendaraan->merk_kendaraan ?? '-',
++                    'jenis_servis'    => $s->jenis_servis,
++                ];
+             });
+ 
+-        if (Schema::hasTable('mekaniks')) {
+-            $stats['active_pits'] = Servis::leftJoin('mekaniks', 'servis.id_mekanik', '=', 'mekaniks.id')
+-                ->leftJoin('kendaraans', 'servis.id_kendaraan', '=', 'kendaraans.id_kendaraan')
+-                ->select('mekaniks.nama_mekanik', 'kendaraans.merk_kendaraan', 'servis.jenis_servis', 'servis.id_mekanik')
+-                ->orderBy('servis.created_at', 'desc')
+-                ->limit(3)
+-                ->get();
+-        } else {
+-            $stats['active_pits'] = [];
+-        }
+-
+         return response()->json($stats);
+     }
+ 
+-    public function masterJasa() {
++    public function masterJasa()
++    {
+         return response()->json(MasterJasa::all());
+     }
+ 
+-    public function listSparepart() {
+-        return response()->json(Sparepart::where('stok', '>', 0)->orderBy('nama_sparepart', 'asc')->get());
++    public function listSparepart()
++    {
++        return response()->json(
++            Sparepart::where('stok', '>', 0)
++                ->orderBy('nama_sparepart', 'asc')
++                ->get()
++                ->map(function ($p) {
++                    return [
++                        '_id'            => (string) $p->_id,
++                        'id_sparepart'   => (string) $p->_id, // backward compat
++                        'nama_sparepart' => $p->nama_sparepart,
++                        'harga'          => $p->harga,
++                        'stok'           => $p->stok,
++                        'jenis_sparepart' => $p->jenis_sparepart,
++                    ];
++                })
++        );
+     }
+ 
+-    public function gudangData() {
+-        return response()->json(Sparepart::orderBy('nama_sparepart', 'asc')->get());
++    public function gudangData()
++    {
++        return response()->json(
++            Sparepart::orderBy('nama_sparepart', 'asc')
++                ->get()
++                ->map(function ($p) {
++                    return [
++                        '_id'             => (string) $p->_id,
++                        'id_sparepart'    => (string) $p->_id, // backward compat
++                        'nama_sparepart'  => $p->nama_sparepart,
++                        'harga'           => $p->harga,
++                        'stok'            => $p->stok,
++                        'jenis_sparepart' => $p->jenis_sparepart,
++                    ];
++                })
++        );
+     }
+ 
+     // --- LOGIKA BUKA NOTA BERDASARKAN NOMOR URUT ANTREAN HARIAN BUKAN ID DATABASE ---
+-    public function bukaNota(Request $request) {
++    public function bukaNota(Request $request)
++    {
+         $hariIni = today();
+         $nomorAntreanInput = (int) $request->id_kendaraan;
+ 
+@@ -93,51 +165,96 @@ public function bukaNota(Request $request) {
+         }
+ 
+         $s = Servis::create([
+-            'id_kendaraan' => $kendaraan->id_kendaraan ?? $kendaraan->id,
++            'kendaraan_id' => $kendaraan->_id,
+             'id_mekanik'   => $request->id_mekanik,
+             'jenis_servis' => $request->jenis_servis,
+             'biaya_jasa'   => $request->biaya_jasa,
++            'detail_parts' => [], // Inisialisasi array kosong untuk embedded parts
+         ]);
+ 
+-        return response()->json(['id_servis' => $s->id_servis]);
++        return response()->json(['id_servis' => (string) $s->_id]);
+     }
+ 
+-    public function pasangSparepart(Request $request, $id_servis) {
+-        return DB::transaction(function () use ($request, $id_servis) {
+-            $p = Sparepart::where('id_sparepart', $request->id_sparepart)->first();
+-            if (!$p || $p->stok < $request->jumlah) return response()->json(['pesan' => 'Stok Kurang'], 400);
+-
+-            $p->decrement('stok', $request->jumlah);
+-            DetailServis::create([
+-                'id_servis' => $id_servis, 'id_sparepart' => $p->id_sparepart,
+-                'jumlah' => $request->jumlah, 'subtotal' => $p->harga * $request->jumlah
+-            ]);
+-            return response()->json(['pesan' => 'Sukses']);
+-        });
++    public function pasangSparepart(Request $request, $id_servis)
++    {
++        $servis = Servis::find($id_servis);
++        if (!$servis) {
++            return response()->json(['pesan' => 'Nota Tidak Ditemukan'], 404);
++        }
++
++        $p = Sparepart::find($request->id_sparepart);
++        if (!$p || $p->stok < $request->jumlah) {
++            return response()->json(['pesan' => 'Stok Kurang'], 400);
++        }
++
++        // Kurangi stok sparepart
++        $p->decrement('stok', $request->jumlah);
++
++        // Push ke embedded array detail_parts di document Servis
++        // (single-document update = atomic di MongoDB)
++        $servis->push('detail_parts', [
++            'sparepart_id'   => (string) $p->_id,
++            'nama_sparepart' => $p->nama_sparepart,
++            'jumlah'         => (int) $request->jumlah,
++            'subtotal'       => (float) ($p->harga * $request->jumlah),
++        ]);
++
++        return response()->json(['pesan' => 'Sukses']);
+     }
+ 
+-    public function cetakTagihan($id_servis) {
+-        $s = Servis::where('id_servis', $id_servis)->first();
+-        if (!$s) return response()->json(['pesan' => 'Nota Tidak Ditemukan'], 404);
+-        $k = Kendaraan::where('id_kendaraan', $s->id_kendaraan)->first();
++    public function cetakTagihan($id_servis)
++    {
++        $s = Servis::find($id_servis);
++        if (!$s) {
++            return response()->json(['pesan' => 'Nota Tidak Ditemukan'], 404);
++        }
++
++        $kendaraan = $s->kendaraan;
+ 
+-        $p = DetailServis::where('id_servis', $id_servis)
+-            ->leftJoin('spareparts', 'detail_servis.id_sparepart', '=', 'spareparts.id_sparepart')
+-            ->select('spareparts.nama_sparepart', 'detail_servis.jumlah', 'detail_servis.subtotal')
+-            ->get();
++        // Detail parts sudah embedded di document servis
++        $parts = collect($s->detail_parts ?? []);
+ 
+         return response()->json([
+-            'nota'        => $s,
+-            'kendaraan'   => $k ?? ['nama_pelanggan' => 'Pelanggan Umum', 'merk_kendaraan' => '-', 'nomor_polisi' => '-'],
+-            'sparepart'   => $p,
+-            'grand_total' => (int)($s->biaya_jasa + $p->sum('subtotal'))
++            'nota' => [
++                '_id'          => (string) $s->_id,
++                'id_servis'    => (string) $s->_id, // backward compat
++                'kendaraan_id' => (string) $s->kendaraan_id,
++                'id_mekanik'   => $s->id_mekanik,
++                'jenis_servis' => $s->jenis_servis,
++                'biaya_jasa'   => $s->biaya_jasa,
++                'created_at'   => $s->created_at,
++            ],
++            'kendaraan' => $kendaraan
++                ? [
++                    '_id'            => (string) $kendaraan->_id,
++                    'nama_pelanggan' => $kendaraan->nama_pelanggan,
++                    'merk_kendaraan' => $kendaraan->merk_kendaraan,
++                    'nomor_polisi'   => $kendaraan->nomor_polisi,
++                ]
++                : ['nama_pelanggan' => 'Pelanggan Umum', 'merk_kendaraan' => '-', 'nomor_polisi' => '-'],
++            'sparepart'   => $parts->map(function ($p) {
++                return [
++                    'nama_sparepart' => $p['nama_sparepart'],
++                    'jumlah'         => $p['jumlah'],
++                    'subtotal'       => $p['subtotal'],
++                ];
++            })->values(),
++            'grand_total' => (int)($s->biaya_jasa + $parts->sum('subtotal')),
+         ]);
+     }
+ 
+-    public function tambahBarang(Request $request) { Sparepart::create($request->all()); return response()->json(['pesan' => 'Disimpan']); }
+-    public function restockBarang(Request $request) {
+-        $p = Sparepart::where('id_sparepart', $request->id_sparepart)->first();
+-        if (!$p) return response()->json(['pesan' => 'Part Tidak Ditemukan'], 404);
++    public function tambahBarang(Request $request)
++    {
++        Sparepart::create($request->all());
++        return response()->json(['pesan' => 'Disimpan']);
++    }
++
++    public function restockBarang(Request $request)
++    {
++        $p = Sparepart::find($request->id_sparepart);
++        if (!$p) {
++            return response()->json(['pesan' => 'Part Tidak Ditemukan'], 404);
++        }
+         $p->increment('stok', $request->tambah_stok);
+         return response()->json(['pesan' => 'Sukses']);
+     }
+diff --git a/Bengkel/app/Models/DetailServis.php b/Bengkel/app/Models/DetailServis.php
+deleted file mode 100644
+index d6c3a0e..0000000
+--- a/Bengkel/app/Models/DetailServis.php
++++ /dev/null
+@@ -1,14 +0,0 @@
+-<?php
+-
+-namespace App\Models;
+-
+-use Illuminate\Database\Eloquent\Model;
+-
+-class DetailServis extends Model
+-{
+-    // Mengunci nama tabel yang benar (sudah diperbaiki dari 'lable' ke 'table')
+-    protected $table = 'detail_servis';
+-
+-    // Mengizinkan pengisian data otomatis (sudah diperbaiki dari 'protecled' ke 'protected')
+-    protected $guarded = [];
+-}
+diff --git a/Bengkel/app/Models/Kendaraan.php b/Bengkel/app/Models/Kendaraan.php
+index 760bac4..a8d8d6a 100644
+--- a/Bengkel/app/Models/Kendaraan.php
++++ b/Bengkel/app/Models/Kendaraan.php
+@@ -1,9 +1,20 @@
+ <?php
++
+ namespace App\Models;
+-use Illuminate\Database\Eloquent\Model;
+ 
+-class Kendaraan extends Model {
+-    protected $table = 'kendaraans';
+-    protected $primaryKey = 'id_kendaraan';
+-    protected $guarded = []; // Mengizinkan semua input masuk
++use MongoDB\Laravel\Eloquent\Model;
++
++class Kendaraan extends Model
++{
++    protected $connection = 'mongodb';
++    protected $collection = 'kendaraans';
++    protected $guarded = [];
++
++    /**
++     * Relasi: Satu kendaraan memiliki banyak servis
++     */
++    public function servis()
++    {
++        return $this->hasMany(Servis::class, 'kendaraan_id', '_id');
++    }
+ }
+diff --git a/Bengkel/app/Models/MasterJasa.php b/Bengkel/app/Models/MasterJasa.php
+index 961cf55..b1635ae 100644
+--- a/Bengkel/app/Models/MasterJasa.php
++++ b/Bengkel/app/Models/MasterJasa.php
+@@ -3,13 +3,14 @@
+ namespace App\Models;
+ 
+ use Illuminate\Database\Eloquent\Factories\HasFactory;
+-use Illuminate\Database\Eloquent\Model;
++use MongoDB\Laravel\Eloquent\Model;
+ 
+ class MasterJasa extends Model
+ {
+     use HasFactory;
+ 
+-    // Tabel ini juga menggunakan nama ID bawaan Laravel yaitu 'id'
++    protected $connection = 'mongodb';
++    protected $collection = 'master_jasas';
+ 
+     // Mengizinkan semua kolom diisi secara massal
+     protected $guarded = [];
+diff --git a/Bengkel/app/Models/Servis.php b/Bengkel/app/Models/Servis.php
+index 07d7fbb..4288e14 100644
+--- a/Bengkel/app/Models/Servis.php
++++ b/Bengkel/app/Models/Servis.php
+@@ -1,9 +1,31 @@
+ <?php
++
+ namespace App\Models;
+-use Illuminate\Database\Eloquent\Model;
+ 
+-class Servis extends Model {
+-    protected $table = 'servis'; // Mengunci nama tabel tanpa 's'
+-    protected $primaryKey = 'id_servis';
++use MongoDB\Laravel\Eloquent\Model;
++
++class Servis extends Model
++{
++    protected $connection = 'mongodb';
++    protected $collection = 'servis';
+     protected $guarded = [];
++
++    /**
++     * Relasi: Servis milik satu kendaraan (referenced)
++     */
++    public function kendaraan()
++    {
++        return $this->belongsTo(Kendaraan::class, 'kendaraan_id', '_id');
++    }
++
++    /**
++     * detail_parts disimpan sebagai embedded array (field biasa di document ini).
++     * Contoh struktur:
++     * [
++     *   ['sparepart_id' => '...', 'nama_sparepart' => '...', 'jumlah' => 2, 'subtotal' => 90000],
++     *   ...
++     * ]
++     *
++     * Untuk menambah part: $servis->push('detail_parts', [...])
++     */
+ }
+diff --git a/Bengkel/app/Models/Sparepart.php b/Bengkel/app/Models/Sparepart.php
+index 73e57cf..1a17ea9 100644
+--- a/Bengkel/app/Models/Sparepart.php
++++ b/Bengkel/app/Models/Sparepart.php
+@@ -1,12 +1,15 @@
+ <?php
++
+ namespace App\Models;
++
+ use Illuminate\Database\Eloquent\Factories\HasFactory;
+-use Illuminate\Database\Eloquent\Model;
++use MongoDB\Laravel\Eloquent\Model;
+ 
+ class Sparepart extends Model
+ {
+     use HasFactory;
+-    protected $table = 'spareparts';
+-    protected $primaryKey = 'id_sparepart'; // Kunci utamanya
++
++    protected $connection = 'mongodb';
++    protected $collection = 'spareparts';
+     protected $guarded = [];
+ }
+diff --git a/Bengkel/app/Models/User.php b/Bengkel/app/Models/User.php
+index 68f3a66..8e71dd9 100644
+--- a/Bengkel/app/Models/User.php
++++ b/Bengkel/app/Models/User.php
+@@ -5,14 +5,17 @@
+ // use Illuminate\Contracts\Auth\MustVerifyEmail;
+ use Database\Factories\UserFactory;
+ use Illuminate\Database\Eloquent\Factories\HasFactory;
+-use Illuminate\Foundation\Auth\User as Authenticatable;
+ use Illuminate\Notifications\Notifiable;
++use MongoDB\Laravel\Auth\User as Authenticatable;
+ 
+ class User extends Authenticatable
+ {
+     /** @use HasFactory<UserFactory> */
+     use HasFactory, Notifiable;
+ 
++    protected $connection = 'mongodb';
++    protected $collection = 'users';
++
+     /**
+      * The attributes that are mass assignable.
+      *
+diff --git a/Bengkel/composer.json b/Bengkel/composer.json
+index 70921ac..5aa3dae 100644
+--- a/Bengkel/composer.json
++++ b/Bengkel/composer.json
+@@ -9,7 +9,8 @@
+         "php": "^8.2",
+         "laravel/framework": "^12.0",
+         "laravel/sanctum": "^4.0",
+-        "laravel/tinker": "^2.10.1"
++        "laravel/tinker": "^2.10.1",
++        "mongodb/laravel-mongodb": "^5.8"
+     },
+     "require-dev": {
+         "fakerphp/faker": "^1.23",
+diff --git a/Bengkel/composer.lock b/Bengkel/composer.lock
+index e4f12e0..ea7ec1d 100644
+--- a/Bengkel/composer.lock
++++ b/Bengkel/composer.lock
+@@ -4,7 +4,7 @@
+         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+         "This file is @generated automatically"
+     ],
+-    "content-hash": "30ede9cc2d9eecae449b0452a2292045",
++    "content-hash": "7ac6092c4f4f03f0b7573afecf0fc039",
+     "packages": [
+         {
+             "name": "brick/math",
+@@ -2083,6 +2083,186 @@
+             ],
+             "time": "2026-03-08T20:05:35+00:00"
+         },
++        {
++            "name": "mongodb/laravel-mongodb",
++            "version": "5.8.2",
++            "source": {
++                "type": "git",
++                "url": "https://github.com/mongodb/laravel-mongodb",
++                "reference": "179946ce5ee892c0c9227a12cc3c09db204c8e82"
++            },
++            "dist": {
++                "type": "zip",
++                "url": "https://api.github.com/repos/mongodb/laravel-mongodb/zipball/179946ce5ee892c0c9227a12cc3c09db204c8e82",
++                "reference": "179946ce5ee892c0c9227a12cc3c09db204c8e82",
++                "shasum": ""
++            },
++            "require": {
++                "composer-runtime-api": "^2.0.0",
++                "ext-mongodb": "^1.21|^2",
++                "illuminate/cache": "^10.36|^11|^12|^13.0",
++                "illuminate/container": "^10.0|^11|^12|^13.0",
++                "illuminate/database": "^10.30|^11|^12|^13.0",
++                "illuminate/events": "^10.0|^11|^12|^13.0",
++                "illuminate/support": "^10.0|^11|^12|^13.0",
++                "mongodb/mongodb": "^1.21|^2",
++                "php": "^8.1"
++            },
++            "conflict": {
++                "illuminate/bus": "< 10.37.2"
++            },
++            "replace": {
++                "jenssegers/mongodb": "self.version"
++            },
++            "require-dev": {
++                "doctrine/coding-standard": "^12.0",
++                "laravel/scout": "^10.3",
++                "league/flysystem-gridfs": "^3.28",
++                "league/flysystem-read-only": "^3.0",
++                "mockery/mockery": "^1.4.4",
++                "orchestra/testbench": "^8.0|^9.0|^10.0|^11.0",
++                "phpstan/phpstan": "^1.10|^2.1",
++                "phpunit/phpunit": "^10.3|^11.5.3|^12.5.12",
++                "rector/rector": "^1.2|^2.3",
++                "spatie/laravel-query-builder": "^5.6|^6"
++            },
++            "suggest": {
++                "league/flysystem-gridfs": "Filesystem storage in MongoDB with GridFS"
++            },
++            "type": "library",
++            "extra": {
++                "laravel": {
++                    "providers": [
++                        "MongoDB\\Laravel\\MongoDBServiceProvider",
++                        "MongoDB\\Laravel\\MongoDBBusServiceProvider"
++                    ]
++                }
++            },
++            "autoload": {
++                "psr-4": {
++                    "MongoDB\\Laravel\\": "src/"
++                }
++            },
++            "notification-url": "https://packagist.org/downloads/",
++            "license": [
++                "MIT"
++            ],
++            "authors": [
++                {
++                    "name": "Andreas Braun",
++                    "email": "andreas.braun@mongodb.com",
++                    "role": "Leader"
++                },
++                {
++                    "name": "Pauline Vos",
++                    "email": "pauline.vos@mongodb.com",
++                    "role": "Maintainer"
++                },
++                {
++                    "name": "Jérôme Tamarelle",
++                    "email": "jerome.tamarelle@mongodb.com",
++                    "role": "Maintainer"
++                },
++                {
++                    "name": "Jeremy Mikola",
++                    "email": "jmikola@gmail.com",
++                    "role": "Maintainer"
++                },
++                {
++                    "name": "Jens Segers",
++                    "homepage": "https://jenssegers.com",
++                    "role": "Creator"
++                }
++            ],
++            "description": "A MongoDB based Eloquent model and Query builder for Laravel",
++            "homepage": "https://github.com/mongodb/laravel-mongodb",
++            "keywords": [
++                "database",
++                "eloquent",
++                "laravel",
++                "model",
++                "mongo",
++                "mongodb"
++            ],
++            "support": {
++                "issues": "https://www.mongodb.com/support",
++                "security": "https://www.mongodb.com/security"
++            },
++            "time": "2026-06-17T11:34:44+00:00"
++        },
++        {
++            "name": "mongodb/mongodb",
++            "version": "2.3.0",
++            "source": {
++                "type": "git",
++                "url": "https://github.com/mongodb/mongo-php-library",
++                "reference": "12e56461166d915e3dd8e4969ad0940ed5207d88"
++            },
++            "dist": {
++                "type": "zip",
++                "url": "https://api.github.com/repos/mongodb/mongo-php-library/zipball/12e56461166d915e3dd8e4969ad0940ed5207d88",
++                "reference": "12e56461166d915e3dd8e4969ad0940ed5207d88",
++                "shasum": ""
++            },
++            "require": {
++                "composer-runtime-api": "^2.0",
++                "ext-mongodb": "^2.3",
++                "php": "^8.1",
++                "psr/log": "^1.1.4|^2|^3",
++                "symfony/polyfill-php85": "^1.33"
++            },
++            "replace": {
++                "mongodb/builder": "*"
++            },
++            "require-dev": {
++                "doctrine/coding-standard": "^12.0",
++                "phpunit/phpunit": "^10.5.35",
++                "rector/rector": "^2.3.4",
++                "squizlabs/php_codesniffer": "^3.7",
++                "vimeo/psalm": "~6.14.2"
++            },
++            "type": "library",
++            "extra": {
++                "branch-alias": {
++                    "dev-master": "1.x-dev"
++                }
++            },
++            "autoload": {
++                "files": [
++                    "src/functions.php"
++                ],
++                "psr-4": {
++                    "MongoDB\\": "src/"
++                }
++            },
++            "notification-url": "https://packagist.org/downloads/",
++            "license": [
++                "Apache-2.0"
++            ],
++            "authors": [
++                {
++                    "name": "Andreas Braun",
++                    "email": "andreas.braun@mongodb.com"
++                },
++                {
++                    "name": "Jeremy Mikola",
++                    "email": "jmikola@gmail.com"
++                },
++                {
++                    "name": "Jérôme Tamarelle",
++                    "email": "jerome.tamarelle@mongodb.com"
++                }
++            ],
++            "description": "MongoDB driver library",
++            "homepage": "https://jira.mongodb.org/browse/PHPLIB",
++            "keywords": [
++                "database",
++                "driver",
++                "mongodb",
++                "persistence"
++            ],
++            "time": "2026-04-28T12:50:06+00:00"
++        },
+         {
+             "name": "monolog/monolog",
+             "version": "3.10.0",
+diff --git a/Bengkel/config/database.php b/Bengkel/config/database.php
+index 64709ce..b6121ad 100644
+--- a/Bengkel/config/database.php
++++ b/Bengkel/config/database.php
+@@ -1,7 +1,6 @@
+ <?php
+ 
+ use Illuminate\Support\Str;
+-use Pdo\Mysql;
+ 
+ return [
+ 
+@@ -9,29 +8,24 @@
+     |--------------------------------------------------------------------------
+     | Default Database Connection Name
+     |--------------------------------------------------------------------------
+-    |
+-    | Here you may specify which of the database connections below you wish
+-    | to use as your default connection for database operations. This is
+-    | the connection which will be utilized unless another connection
+-    | is explicitly specified when you execute a query / statement.
+-    |
+     */
+ 
+-    'default' => env('DB_CONNECTION', 'sqlite'),
++    'default' => env('DB_CONNECTION', 'mongodb'),
+ 
+     /*
+     |--------------------------------------------------------------------------
+     | Database Connections
+     |--------------------------------------------------------------------------
+-    |
+-    | Below are all of the database connections defined for your application.
+-    | An example configuration is provided for each database system which
+-    | is supported by Laravel. You're free to add / remove connections.
+-    |
+     */
+ 
+     'connections' => [
+ 
++        'mongodb' => [
++            'driver' => 'mongodb',
++            'dsn' => env('DB_URI', 'mongodb://127.0.0.1:27017'),
++            'database' => env('DB_DATABASE', 'bengkel_db'),
++        ],
++
+         'sqlite' => [
+             'driver' => 'sqlite',
+             'url' => env('DB_URL'),
+@@ -60,71 +54,16 @@
+             'strict' => true,
+             'engine' => null,
+             'options' => extension_loaded('pdo_mysql') ? array_filter([
+-                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+-            ]) : [],
+-        ],
+-
+-        'mariadb' => [
+-            'driver' => 'mariadb',
+-            'url' => env('DB_URL'),
+-            'host' => env('DB_HOST', '127.0.0.1'),
+-            'port' => env('DB_PORT', '3306'),
+-            'database' => env('DB_DATABASE', 'laravel'),
+-            'username' => env('DB_USERNAME', 'root'),
+-            'password' => env('DB_PASSWORD', ''),
+-            'unix_socket' => env('DB_SOCKET', ''),
+-            'charset' => env('DB_CHARSET', 'utf8mb4'),
+-            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+-            'prefix' => '',
+-            'prefix_indexes' => true,
+-            'strict' => true,
+-            'engine' => null,
+-            'options' => extension_loaded('pdo_mysql') ? array_filter([
+-                (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
++                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+             ]) : [],
+         ],
+ 
+-        'pgsql' => [
+-            'driver' => 'pgsql',
+-            'url' => env('DB_URL'),
+-            'host' => env('DB_HOST', '127.0.0.1'),
+-            'port' => env('DB_PORT', '5432'),
+-            'database' => env('DB_DATABASE', 'laravel'),
+-            'username' => env('DB_USERNAME', 'root'),
+-            'password' => env('DB_PASSWORD', ''),
+-            'charset' => env('DB_CHARSET', 'utf8'),
+-            'prefix' => '',
+-            'prefix_indexes' => true,
+-            'search_path' => 'public',
+-            'sslmode' => env('DB_SSLMODE', 'prefer'),
+-        ],
+-
+-        'sqlsrv' => [
+-            'driver' => 'sqlsrv',
+-            'url' => env('DB_URL'),
+-            'host' => env('DB_HOST', 'localhost'),
+-            'port' => env('DB_PORT', '1433'),
+-            'database' => env('DB_DATABASE', 'laravel'),
+-            'username' => env('DB_USERNAME', 'root'),
+-            'password' => env('DB_PASSWORD', ''),
+-            'charset' => env('DB_CHARSET', 'utf8'),
+-            'prefix' => '',
+-            'prefix_indexes' => true,
+-            // 'encrypt' => env('DB_ENCRYPT', 'yes'),
+-            // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
+-        ],
+-
+     ],
+ 
+     /*
+     |--------------------------------------------------------------------------
+     | Migration Repository Table
+     |--------------------------------------------------------------------------
+-    |
+-    | This table keeps track of all the migrations that have already run for
+-    | your application. Using this information, we can determine which of
+-    | the migrations on disk haven't actually been run on the database.
+-    |
+     */
+ 
+     'migrations' => [
+@@ -136,11 +75,6 @@
+     |--------------------------------------------------------------------------
+     | Redis Databases
+     |--------------------------------------------------------------------------
+-    |
+-    | Redis is an open source, fast, and advanced key-value store that also
+-    | provides a richer body of commands than a typical key-value system
+-    | such as Memcached. You may define your connection settings here.
+-    |
+     */
+ 
+     'redis' => [
+@@ -160,10 +94,6 @@
+             'password' => env('REDIS_PASSWORD'),
+             'port' => env('REDIS_PORT', '6379'),
+             'database' => env('REDIS_DB', '0'),
+-            'max_retries' => env('REDIS_MAX_RETRIES', 3),
+-            'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
+-            'backoff_base' => env('REDIS_BACKOFF_BASE', 100),
+-            'backoff_cap' => env('REDIS_BACKOFF_CAP', 1000),
+         ],
+ 
+         'cache' => [
+@@ -173,10 +103,6 @@
+             'password' => env('REDIS_PASSWORD'),
+             'port' => env('REDIS_PORT', '6379'),
+             'database' => env('REDIS_CACHE_DB', '1'),
+-            'max_retries' => env('REDIS_MAX_RETRIES', 3),
+-            'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
+-            'backoff_base' => env('REDIS_BACKOFF_BASE', 100),
+-            'backoff_cap' => env('REDIS_BACKOFF_CAP', 1000),
+         ],
+ 
+     ],
+diff --git a/Bengkel/database/migrations/0001_01_01_000000_create_users_table.php b/Bengkel/database/migrations/0001_01_01_000000_create_users_table.php
+index 05fb5d9..21e59a6 100644
+--- a/Bengkel/database/migrations/0001_01_01_000000_create_users_table.php
++++ b/Bengkel/database/migrations/0001_01_01_000000_create_users_table.php
+@@ -1,39 +1,19 @@
+ <?php
+ 
+ use Illuminate\Database\Migrations\Migration;
+-use Illuminate\Database\Schema\Blueprint;
+ use Illuminate\Support\Facades\Schema;
+ 
+ return new class extends Migration
+ {
++    protected $connection = 'mongodb';
++
+     /**
+      * Run the migrations.
+      */
+     public function up(): void
+     {
+-        Schema::create('users', function (Blueprint $table) {
+-            $table->id();
+-            $table->string('name');
+-            $table->string('email')->unique();
+-            $table->timestamp('email_verified_at')->nullable();
+-            $table->string('password');
+-            $table->rememberToken();
+-            $table->timestamps();
+-        });
+-
+-        Schema::create('password_reset_tokens', function (Blueprint $table) {
+-            $table->string('email')->primary();
+-            $table->string('token');
+-            $table->timestamp('created_at')->nullable();
+-        });
+-
+-        Schema::create('sessions', function (Blueprint $table) {
+-            $table->string('id')->primary();
+-            $table->foreignId('user_id')->nullable()->index();
+-            $table->string('ip_address', 45)->nullable();
+-            $table->text('user_agent')->nullable();
+-            $table->longText('payload');
+-            $table->integer('last_activity')->index();
++        Schema::connection('mongodb')->create('users', function ($collection) {
++            $collection->unique('email');
+         });
+     }
+ 
+@@ -42,8 +22,6 @@ public function up(): void
+      */
+     public function down(): void
+     {
+-        Schema::dropIfExists('users');
+-        Schema::dropIfExists('password_reset_tokens');
+-        Schema::dropIfExists('sessions');
++        Schema::connection('mongodb')->dropIfExists('users');
+     }
+ };
+diff --git a/Bengkel/database/migrations/0001_01_01_000001_create_cache_table.php b/Bengkel/database/migrations/0001_01_01_000001_create_cache_table.php
+deleted file mode 100644
+index ed758bd..0000000
+--- a/Bengkel/database/migrations/0001_01_01_000001_create_cache_table.php
++++ /dev/null
+@@ -1,35 +0,0 @@
+-<?php
+-
+-use Illuminate\Database\Migrations\Migration;
+-use Illuminate\Database\Schema\Blueprint;
+-use Illuminate\Support\Facades\Schema;
+-
+-return new class extends Migration
+-{
+-    /**
+-     * Run the migrations.
+-     */
+-    public function up(): void
+-    {
+-        Schema::create('cache', function (Blueprint $table) {
+-            $table->string('key')->primary();
+-            $table->mediumText('value');
+-            $table->integer('expiration')->index();
+-        });
+-
+-        Schema::create('cache_locks', function (Blueprint $table) {
+-            $table->string('key')->primary();
+-            $table->string('owner');
+-            $table->integer('expiration')->index();
+-        });
+-    }
+-
+-    /**
+-     * Reverse the migrations.
+-     */
+-    public function down(): void
+-    {
+-        Schema::dropIfExists('cache');
+-        Schema::dropIfExists('cache_locks');
+-    }
+-};
+diff --git a/Bengkel/database/migrations/0001_01_01_000002_create_jobs_table.php b/Bengkel/database/migrations/0001_01_01_000002_create_jobs_table.php
+deleted file mode 100644
+index 425e705..0000000
+--- a/Bengkel/database/migrations/0001_01_01_000002_create_jobs_table.php
++++ /dev/null
+@@ -1,57 +0,0 @@
+-<?php
+-
+-use Illuminate\Database\Migrations\Migration;
+-use Illuminate\Database\Schema\Blueprint;
+-use Illuminate\Support\Facades\Schema;
+-
+-return new class extends Migration
+-{
+-    /**
+-     * Run the migrations.
+-     */
+-    public function up(): void
+-    {
+-        Schema::create('jobs', function (Blueprint $table) {
+-            $table->id();
+-            $table->string('queue')->index();
+-            $table->longText('payload');
+-            $table->unsignedTinyInteger('attempts');
+-            $table->unsignedInteger('reserved_at')->nullable();
+-            $table->unsignedInteger('available_at');
+-            $table->unsignedInteger('created_at');
+-        });
+-
+-        Schema::create('job_batches', function (Blueprint $table) {
+-            $table->string('id')->primary();
+-            $table->string('name');
+-            $table->integer('total_jobs');
+-            $table->integer('pending_jobs');
+-            $table->integer('failed_jobs');
+-            $table->longText('failed_job_ids');
+-            $table->mediumText('options')->nullable();
+-            $table->integer('cancelled_at')->nullable();
+-            $table->integer('created_at');
+-            $table->integer('finished_at')->nullable();
+-        });
+-
+-        Schema::create('failed_jobs', function (Blueprint $table) {
+-            $table->id();
+-            $table->string('uuid')->unique();
+-            $table->text('connection');
+-            $table->text('queue');
+-            $table->longText('payload');
+-            $table->longText('exception');
+-            $table->timestamp('failed_at')->useCurrent();
+-        });
+-    }
+-
+-    /**
+-     * Reverse the migrations.
+-     */
+-    public function down(): void
+-    {
+-        Schema::dropIfExists('jobs');
+-        Schema::dropIfExists('job_batches');
+-        Schema::dropIfExists('failed_jobs');
+-    }
+-};
+diff --git a/Bengkel/database/migrations/2026_05_14_135821_create_kendaraans_table.php b/Bengkel/database/migrations/2026_05_14_135821_create_kendaraans_table.php
+index 4d70cf1..3fef73e 100644
+--- a/Bengkel/database/migrations/2026_05_14_135821_create_kendaraans_table.php
++++ b/Bengkel/database/migrations/2026_05_14_135821_create_kendaraans_table.php
+@@ -1,29 +1,23 @@
+ <?php
+ 
+ use Illuminate\Database\Migrations\Migration;
+-use Illuminate\Database\Schema\Blueprint;
+ use Illuminate\Support\Facades\Schema;
+ 
+ return new class extends Migration
+ {
++    protected $connection = 'mongodb';
++
+     public function up()
+     {
+-        Schema::create('kendaraans', function (Blueprint $table) {
+-            // Primary key khusus bernama id_kendaraan
+-            $table->id('id_kendaraan');
+-
+-            // Kolom data pelanggan
+-            $table->string('nama_pelanggan');
+-            $table->string('nomor_polisi');
+-            $table->string('merk_kendaraan');
+-
+-            // Timestamps otomatis membuat kolom 'created_at' dan 'updated_at'
+-            $table->timestamps();
++        Schema::connection('mongodb')->create('kendaraans', function ($collection) {
++            $collection->index('created_at');
++            $collection->index('nama_pelanggan');
++            $collection->index('nomor_polisi');
+         });
+     }
+ 
+     public function down()
+     {
+-        Schema::dropIfExists('kendaraans');
++        Schema::connection('mongodb')->dropIfExists('kendaraans');
+     }
+ };
+diff --git a/Bengkel/database/migrations/2026_05_14_135837_create_spareparts_table.php b/Bengkel/database/migrations/2026_05_14_135837_create_spareparts_table.php
+index 9337110..c080254 100644
+--- a/Bengkel/database/migrations/2026_05_14_135837_create_spareparts_table.php
++++ b/Bengkel/database/migrations/2026_05_14_135837_create_spareparts_table.php
+@@ -1,28 +1,23 @@
+ <?php
+ 
+ use Illuminate\Database\Migrations\Migration;
+-use Illuminate\Database\Schema\Blueprint;
+ use Illuminate\Support\Facades\Schema;
+ 
+ return new class extends Migration
+ {
++    protected $connection = 'mongodb';
++
+     public function up()
+     {
+-        Schema::create('spareparts', function (Blueprint $table) {
+-            $table->id('id_sparepart');
+-
+-            $table->string('nama_sparepart');
+-            // Decimal dengan 15 digit total, 2 digit di belakang koma (untuk uang)
+-            $table->decimal('harga', 15, 2);
+-            $table->integer('stok');
+-            $table->string('jenis_sparepart')->default('Umum');
+-
+-            $table->timestamps();
++        Schema::connection('mongodb')->create('spareparts', function ($collection) {
++            $collection->index('nama_sparepart');
++            $collection->index('stok');
++            $collection->index('jenis_sparepart');
+         });
+     }
+ 
+     public function down()
+     {
+-        Schema::dropIfExists('spareparts');
++        Schema::connection('mongodb')->dropIfExists('spareparts');
+     }
+ };
+diff --git a/Bengkel/database/migrations/2026_05_14_135858_create_master_jasas_table.php b/Bengkel/database/migrations/2026_05_14_135858_create_master_jasas_table.php
+index 473e727..74d0839 100644
+--- a/Bengkel/database/migrations/2026_05_14_135858_create_master_jasas_table.php
++++ b/Bengkel/database/migrations/2026_05_14_135858_create_master_jasas_table.php
+@@ -1,26 +1,21 @@
+ <?php
+ 
+ use Illuminate\Database\Migrations\Migration;
+-use Illuminate\Database\Schema\Blueprint;
+ use Illuminate\Support\Facades\Schema;
+ 
+ return new class extends Migration
+ {
++    protected $connection = 'mongodb';
++
+     public function up()
+     {
+-        Schema::create('master_jasas', function (Blueprint $table) {
+-            $table->id(); // Memakai nama default 'id'
+-
+-            $table->string('nama_layanan');
+-            $table->decimal('biaya_standar', 15, 2);
+-            $table->integer('id_mekanik_default')->default(1);
+-
+-            $table->timestamps();
++        Schema::connection('mongodb')->create('master_jasas', function ($collection) {
++            $collection->index('nama_layanan');
+         });
+     }
+ 
+     public function down()
+     {
+-        Schema::dropIfExists('master_jasas');
++        Schema::connection('mongodb')->dropIfExists('master_jasas');
+     }
+ };
+diff --git a/Bengkel/database/migrations/2026_05_14_135914_create_servis_table.php b/Bengkel/database/migrations/2026_05_14_135914_create_servis_table.php
+index b6fc229..8da1b5f 100644
+--- a/Bengkel/database/migrations/2026_05_14_135914_create_servis_table.php
++++ b/Bengkel/database/migrations/2026_05_14_135914_create_servis_table.php
+@@ -1,28 +1,22 @@
+ <?php
+ 
+ use Illuminate\Database\Migrations\Migration;
+-use Illuminate\Database\Schema\Blueprint;
+ use Illuminate\Support\Facades\Schema;
+ 
+ return new class extends Migration
+ {
++    protected $connection = 'mongodb';
++
+     public function up()
+     {
+-        Schema::create('servis', function (Blueprint $table) {
+-            $table->id('id_servis');
+-
+-            // Gunakan unsignedBigInteger karena ini akan merujuk ke ID tabel lain
+-            $table->unsignedBigInteger('id_kendaraan');
+-            $table->integer('id_mekanik');
+-            $table->string('jenis_servis');
+-            $table->decimal('biaya_jasa', 15, 2);
+-
+-            $table->timestamps();
++        Schema::connection('mongodb')->create('servis', function ($collection) {
++            $collection->index('created_at');
++            $collection->index('kendaraan_id');
+         });
+     }
+ 
+     public function down()
+     {
+-        Schema::dropIfExists('servis');
++        Schema::connection('mongodb')->dropIfExists('servis');
+     }
+ };
+diff --git a/Bengkel/database/migrations/2026_05_14_135942_create_detail_servis_table.php b/Bengkel/database/migrations/2026_05_14_135942_create_detail_servis_table.php
+deleted file mode 100644
+index c1269aa..0000000
+--- a/Bengkel/database/migrations/2026_05_14_135942_create_detail_servis_table.php
++++ /dev/null
+@@ -1,30 +0,0 @@
+-<?php
+-
+-use Illuminate\Database\Migrations\Migration;
+-use Illuminate\Database\Schema\Blueprint;
+-use Illuminate\Support\Facades\Schema;
+-
+-return new class extends Migration
+-{
+-    public function up()
+-    {
+-        Schema::create('detail_servis', function (Blueprint $table) {
+-            $table->id();
+-
+-            // Relasi ke nota (id_servis) dan barang (id_sparepart)
+-            $table->unsignedBigInteger('id_servis');
+-            $table->unsignedBigInteger('id_sparepart');
+-
+-            $table->integer('jumlah');
+-            $table->decimal('subtotal', 15, 2);
+-
+-            $table->timestamps();
+-        });
+-    }
+-
+-    public function down()
+-    {
+-        Schema::dropIfExists('detail_servis');
+-    }
+-};
+-
+diff --git a/Bengkel/database/migrations/2026_05_14_145315_create_personal_access_tokens_table.php b/Bengkel/database/migrations/2026_05_14_145315_create_personal_access_tokens_table.php
+index 40ff706..0373360 100644
+--- a/Bengkel/database/migrations/2026_05_14_145315_create_personal_access_tokens_table.php
++++ b/Bengkel/database/migrations/2026_05_14_145315_create_personal_access_tokens_table.php
+@@ -1,25 +1,21 @@
+ <?php
+ 
+ use Illuminate\Database\Migrations\Migration;
+-use Illuminate\Database\Schema\Blueprint;
+ use Illuminate\Support\Facades\Schema;
+ 
+ return new class extends Migration
+ {
++    protected $connection = 'mongodb';
++
+     /**
+      * Run the migrations.
+      */
+     public function up(): void
+     {
+-        Schema::create('personal_access_tokens', function (Blueprint $table) {
+-            $table->id();
+-            $table->morphs('tokenable');
+-            $table->text('name');
+-            $table->string('token', 64)->unique();
+-            $table->text('abilities')->nullable();
+-            $table->timestamp('last_used_at')->nullable();
+-            $table->timestamp('expires_at')->nullable()->index();
+-            $table->timestamps();
++        Schema::connection('mongodb')->create('personal_access_tokens', function ($collection) {
++            $collection->unique('token');
++            $collection->index('tokenable_type');
++            $collection->index('tokenable_id');
+         });
+     }
+ 
+@@ -28,6 +24,6 @@ public function up(): void
+      */
+     public function down(): void
+     {
+-        Schema::dropIfExists('personal_access_tokens');
++        Schema::connection('mongodb')->dropIfExists('personal_access_tokens');
+     }
+ };
+diff --git a/Bengkel/database/seeders/BengkelSeeder.php b/Bengkel/database/seeders/BengkelSeeder.php
+index 6827a02..3c085bd 100644
+--- a/Bengkel/database/seeders/BengkelSeeder.php
++++ b/Bengkel/database/seeders/BengkelSeeder.php
+@@ -3,7 +3,6 @@
+ namespace Database\Seeders;
+ 
+ use Illuminate\Database\Seeder;
+-use Illuminate\Support\Facades\DB;
+ use App\Models\MasterJasa;
+ use App\Models\Sparepart;
+ 
+@@ -14,11 +13,9 @@ class BengkelSeeder extends Seeder
+      */
+     public function run(): void
+     {
+-        // 1. KOSONGKAN TABEL SEBELUM MENGISI (Mencegah data ganda)
+-        DB::statement('SET FOREIGN_KEY_CHECKS=0;'); // Matikan cek kunci sebentar
+-        MasterJasa::truncate();
+-        Sparepart::truncate();
+-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
++        // 1. KOSONGKAN COLLECTION SEBELUM MENGISI (Mencegah data ganda)
++        MasterJasa::query()->delete();
++        Sparepart::query()->delete();
+ 
+         // 2. DATA KATALOG LAYANAN (STANDAR AHASS)
+         $layanan = [
+diff --git a/Bengkel/database/seeders/MasterJasaSeeder.php b/Bengkel/database/seeders/MasterJasaSeeder.php
+index 6894308..0f0f742 100644
+--- a/Bengkel/database/seeders/MasterJasaSeeder.php
++++ b/Bengkel/database/seeders/MasterJasaSeeder.php
+@@ -4,26 +4,23 @@
+ 
+ use Illuminate\Database\Seeder;
+ use App\Models\MasterJasa;
+-use Illuminate\Support\Facades\DB;
+ 
+ class MasterJasaSeeder extends Seeder
+ {
+     public function run()
+     {
+         // Bersihkan data lama terlebih dahulu agar tidak menumpuk
+-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+-        DB::table('master_jasas')->truncate();
+-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
++        MasterJasa::query()->delete();
+ 
+         // 7 Daftar Layanan & Harga Standar AHASS
+         $layanan = [
+-            ['id' => 1, 'nama_layanan' => 'Servis Ganti Oli', 'biaya_standar' => 20000, 'id_mekanik_default' => 2],
+-            ['id' => 2, 'nama_layanan' => 'Ganti Oli Gardan', 'biaya_standar' => 10000, 'id_mekanik_default' => 2],
+-            ['id' => 3, 'nama_layanan' => 'Servis Injeksi', 'biaya_standar' => 65000, 'id_mekanik_default' => 1],
+-            ['id' => 4, 'nama_layanan' => 'Servis CVT', 'biaya_standar' => 60000, 'id_mekanik_default' => 1],
+-            ['id' => 5, 'nama_layanan' => 'Ganti Kampas Rem', 'biaya_standar' => 30000, 'id_mekanik_default' => 2],
+-            ['id' => 6, 'nama_layanan' => 'Bongkar Pasang Ban', 'biaya_standar' => 25000, 'id_mekanik_default' => 2],
+-            ['id' => 7, 'nama_layanan' => 'Servis Ringan', 'biaya_standar' => 75000, 'id_mekanik_default' => 1],
++            ['nama_layanan' => 'Servis Ganti Oli', 'biaya_standar' => 20000, 'id_mekanik_default' => 2],
++            ['nama_layanan' => 'Ganti Oli Gardan', 'biaya_standar' => 10000, 'id_mekanik_default' => 2],
++            ['nama_layanan' => 'Servis Injeksi', 'biaya_standar' => 65000, 'id_mekanik_default' => 1],
++            ['nama_layanan' => 'Servis CVT', 'biaya_standar' => 60000, 'id_mekanik_default' => 1],
++            ['nama_layanan' => 'Ganti Kampas Rem', 'biaya_standar' => 30000, 'id_mekanik_default' => 2],
++            ['nama_layanan' => 'Bongkar Pasang Ban', 'biaya_standar' => 25000, 'id_mekanik_default' => 2],
++            ['nama_layanan' => 'Servis Ringan', 'biaya_standar' => 75000, 'id_mekanik_default' => 1],
+         ];
+ 
+         // Masukkan data baru ke database
+diff --git a/Bengkel/resources/views/billing.blade.php b/Bengkel/resources/views/billing.blade.php
+index 41a0f69..9d6a1b4 100644
+--- a/Bengkel/resources/views/billing.blade.php
++++ b/Bengkel/resources/views/billing.blade.php
+@@ -73,18 +73,20 @@
+         try {
+             const res = await fetch(`${API}/dashboard-stats`); if(!res.ok) return;
+             const d = await res.json();
+-            document.getElementById('tableBillingLog').innerHTML = d.recent_logs.map(l => `
++            document.getElementById('tableBillingLog').innerHTML = d.recent_logs.map(l => {
++                const shortId = l.id_servis.slice(-6).toUpperCase();
++                return `
+                 <tr class="hover:bg-gray-50 transition-colors">
+-                    <td class="px-6 py-4 font-mono font-semibold text-primary">#JS-${l.id_servis}</td>
++                    <td class="px-6 py-4 font-mono font-semibold text-primary">#${shortId}</td>
+                     <td class="px-6 py-4"><p class="font-semibold">${l.nama_pelanggan || 'Umum'}</p></td>
+                     <td class="px-6 py-4"><span class="px-3 py-1 bg-[#BBF7D0] text-[#15803D] rounded-pill text-xs font-medium">Selesai</span></td>
+                     <td class="px-6 py-4 text-center">
+-                        <button type="button" onclick="showDigitalNotes(${l.id_servis})" class="text-secondary hover:text-primary transition-colors">
++                        <button type="button" onclick="showDigitalNotes('${l.id_servis}')" class="text-secondary hover:text-primary transition-colors">
+                             <span class="material-symbols-outlined">visibility</span>
+                         </button>
+                     </td>
+-                </tr>
+-            `).join('') || '<tr><td colspan="4" class="p-6 text-center text-gray-500">Belum ada transaksi</td></tr>';
++                </tr>`;
++            }).join('') || '<tr><td colspan="4" class="p-6 text-center text-gray-500">Belum ada transaksi</td></tr>';
+         } catch (e) {}
+     }
+ 
+diff --git a/Bengkel/resources/views/dashboard.blade.php b/Bengkel/resources/views/dashboard.blade.php
+index c884564..e894b21 100644
+--- a/Bengkel/resources/views/dashboard.blade.php
++++ b/Bengkel/resources/views/dashboard.blade.php
+@@ -54,7 +54,7 @@
+                 </div>
+                 <div class="space-y-4 flex-1">
+                     <div id="msgPart" class="text-sm font-bold text-[#15803D] h-4"></div>
+-                    <input type="number" id="notaId" class="lf-input w-full" placeholder="Nomor Nota Target">
++                    <input type="text" id="notaId" class="lf-input w-full" placeholder="ID Nota Target">
+                     <select id="selPart" class="lf-input w-full">
+                         <option value="" disabled selected>Memuat Data Gudang...</option>
+                     </select>
+@@ -67,7 +67,7 @@
+             <div class="lf-card col-span-1 md:col-span-2">
+                 <h4 class="font-headline text-lg font-semibold text-gray-800 mb-4">Kasir & Tagihan</h4>
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+-                    <input type="number" id="cariId" class="lf-input w-full" placeholder="Nomor Nota">
++                    <input type="text" id="cariId" class="lf-input w-full" placeholder="ID Nota">
+                     <input type="number" id="diskon" class="lf-input w-full" value="0" placeholder="Diskon (Rp)">
+                 </div>
+                 <button type="button" onclick="cariStruk()" class="lf-btn-primary w-full py-3 mt-4 font-semibold text-sm">Buka & Cetak Kasir</button>
+@@ -169,14 +169,14 @@ function syncJasa() { const s = document.getElementById('selJasa').selectedOptio
+     async function prosesNota() {
+         const p = { id_kendaraan: parseInt(document.getElementById('idKen').value), id_mekanik: parseInt(document.getElementById('idMek').value), jenis_servis: document.getElementById('selJasa').value, biaya_jasa: parseFloat(document.getElementById('biaya').value) };
+         const res = await fetch(`${API}/servis`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) }); const out = await res.json();
+-        if(res.ok) { alertMsg('msgNota', `NOTA #JS-${out.id_servis} BERHASIL`); document.getElementById('notaId').value = out.id_servis; document.getElementById('cariId').value = out.id_servis; loadStats(); } else alertMsg('msgNota', 'Gagal memproses antrean', false);
++        if(res.ok) { alertMsg('msgNota', `NOTA ${out.id_servis.slice(-6).toUpperCase()} BERHASIL`); document.getElementById('notaId').value = out.id_servis; document.getElementById('cariId').value = out.id_servis; loadStats(); } else alertMsg('msgNota', 'Gagal memproses antrean', false);
+     }
+ 
+     async function loadSpareparts() {
+         try {
+             const res = await fetch(`${API}/list-sparepart`); const d = await res.json();
+             let o = '<option value="" disabled selected>Pilih Sparepart...</option>';
+-            d.forEach(p => o += `<option value="${p.id_sparepart}">${p.nama_sparepart} (Sisa: ${p.stok})</option>`);
++            d.forEach(p => o += `<option value="${p._id}">${p.nama_sparepart} (Sisa: ${p.stok})</option>`);
+             document.getElementById('selPart').innerHTML = o;
+         } catch (e) {}
+     }
+@@ -184,7 +184,7 @@ function syncJasa() { const s = document.getElementById('selJasa').selectedOptio
+     async function tambahPart() {
+         const selectValue = document.getElementById('selPart').value;
+         if(!selectValue) { alertMsg('msgPart', 'Pilih part dahulu!', false); return; }
+-        const p = { id_sparepart: parseInt(selectValue), jumlah: parseInt(document.getElementById('qty').value) };
++        const p = { id_sparepart: selectValue, jumlah: parseInt(document.getElementById('qty').value) };
+         const res = await fetch(`${API}/servis/${document.getElementById('notaId').value}/sparepart`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) });
+         if(res.ok) { alertMsg('msgPart', 'BERHASIL DIPASANG'); loadStats(); loadSpareparts(); } else alertMsg('msgPart', 'Gagal dipasang', false);
+     }
+@@ -195,7 +195,7 @@ function syncJasa() { const s = document.getElementById('selJasa').selectedOptio
+         const res = await fetch(`${API}/servis/${id}/tagihan`); if(!res.ok) { alert("Tidak ditemukan!"); return; }
+         const d = await res.json(); const meks = { 1: "Agus (Pit 1)", 2: "Budi (Pit 2)", 3: "Anton (Pit 3)" };
+ 
+-        document.getElementById('sId').innerText = "#JS-" + d.nota.id_servis;
++        document.getElementById('sId').innerText = "#" + d.nota.id_servis.slice(-6).toUpperCase();
+         document.getElementById('sNama').innerText = d.kendaraan.nama_pelanggan || 'Umum';
+         document.getElementById('sMek').innerText = meks[d.nota.id_mekanik] || 'Mekanik';
+ 
+diff --git a/Bengkel/resources/views/warehouse.blade.php b/Bengkel/resources/views/warehouse.blade.php
+index fd6a4f1..2fa261c 100644
+--- a/Bengkel/resources/views/warehouse.blade.php
++++ b/Bengkel/resources/views/warehouse.blade.php
+@@ -82,14 +82,15 @@ function closeModal(id) { document.getElementById('overlay').classList.add('hidd
+             const res = await fetch(`${API}/data-gudang`); const data = await res.json();
+             document.getElementById('tableGudang').innerHTML = data.map(p => {
+                 let badge = p.stok > 10 ? 'bg-[#BBF7D0] text-[#15803D]' : (p.stok > 0 ? 'bg-[#FED7AA] text-[#C2410C]' : 'bg-[#FEF2F2] text-[#EF4444]');
++                const shortId = p._id.slice(-6).toUpperCase();
+                 return `
+                 <tr class="hover:bg-gray-50 transition-colors">
+-                    <td class="px-6 py-4 font-mono text-gray-500 text-center">#${p.id_sparepart}</td>
++                    <td class="px-6 py-4 font-mono text-gray-500 text-center">#${shortId}</td>
+                     <td class="px-6 py-4 font-semibold text-gray-800">${p.nama_sparepart}</td>
+                     <td class="px-6 py-4 font-mono text-gray-700">Rp ${parseInt(p.harga).toLocaleString('id-ID')}</td>
+                     <td class="px-6 py-4"><span class="px-3 py-1 rounded-pill text-xs font-semibold ${badge}">${p.stok} Unit</span></td>
+                     <td class="px-6 py-4 text-center">
+-                        <button type="button" onclick="bukaRestockCepat(${p.id_sparepart}, '${p.nama_sparepart}')" class="text-primary hover:text-primaryHover transition-colors">
++                        <button type="button" onclick="bukaRestockCepat('${p._id}', '${p.nama_sparepart}')" class="text-primary hover:text-primaryHover transition-colors">
+                             <span class="material-symbols-outlined">add_circle</span>
+                         </button>
+                     </td>
+@@ -110,7 +111,7 @@ function bukaRestockCepat(id, nama) {
+     }
+ 
+     async function prosesRestockCepat() {
+-        const p = { id_sparepart: parseInt(document.getElementById('qIdPart').value), tambah_stok: parseInt(document.getElementById('qTambahStok').value) };
++        const p = { id_sparepart: document.getElementById('qIdPart').value, tambah_stok: parseInt(document.getElementById('qTambahStok').value) };
+         const res = await fetch(`${API}/restock-barang`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) });
+         if(res.ok) { alertMsg('msgRestockQuick', 'Stok ditambah!'); loadGudang(); setTimeout(() => closeModal('restockQuickModal'), 1000); }
+     }
+diff --git a/Bengkel/routes/api.php b/Bengkel/routes/api.php
+index 39c15c4..8caa8d7 100644
+--- a/Bengkel/routes/api.php
++++ b/Bengkel/routes/api.php
+@@ -13,8 +13,7 @@
+ // 2. RUTE DASHBOARD & KASIR
+ // ==========================================
+ Route::get('/dashboard-stats', [BengkelController::class, 'dashboardStats']);
+-Route::get('/master-jasa', [App\Http\Controllers\BengkelController::class, 'masterJasa']);
+-Route::get('/servis', [BengkelController::class, 'getSemuaServis']);
++Route::get('/master-jasa', [BengkelController::class, 'masterJasa']);
+ Route::post('/servis', [BengkelController::class, 'bukaNota']);
+ 
+ Route::post('/servis/{id_servis}/sparepart', [BengkelController::class, 'pasangSparepart']);
+@@ -25,12 +24,5 @@
+ // ==========================================
+ Route::post('/tambah-barang', [BengkelController::class, 'tambahBarang']);
+ Route::post('/restock-barang', [BengkelController::class, 'restockBarang']);
+-
+-// warehouse
+-
+-
+-Route::get('/', function () { return view('dashboard'); });
+-Route::get('/warehouse', function () { return view('warehouse'); });
+-// Nanti kamu bisa tambah route untuk /billing di sini
+-Route::get('/list-sparepart', [App\Http\Controllers\BengkelController::class, 'listSparepart']);
+-Route::get('/data-gudang', [App\Http\Controllers\BengkelController::class, 'gudangData']);
++Route::get('/list-sparepart', [BengkelController::class, 'listSparepart']);
++Route::get('/data-gudang', [BengkelController::class, 'gudangData']);

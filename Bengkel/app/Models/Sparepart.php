@@ -1,12 +1,15 @@
 <?php
+
 namespace App\Models;
+
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\Model;
 
 class Sparepart extends Model
 {
     use HasFactory;
-    protected $table = 'spareparts';
-    protected $primaryKey = 'id_sparepart'; // Kunci utamanya
+
+    protected $connection = 'mongodb';
+    protected $collection = 'spareparts';
     protected $guarded = [];
 }

@@ -73,18 +73,20 @@
         try {
             const res = await fetch(`${API}/dashboard-stats`); if(!res.ok) return;
             const d = await res.json();
-            document.getElementById('tableBillingLog').innerHTML = d.recent_logs.map(l => `
+            document.getElementById('tableBillingLog').innerHTML = d.recent_logs.map(l => {
+                const shortId = l.id_servis.slice(-6).toUpperCase();
+                return `
                 <tr class="hover:bg-gray-50 transition-colors">
-                    <td class="px-6 py-4 font-mono font-semibold text-primary">#JS-${l.id_servis}</td>
+                    <td class="px-6 py-4 font-mono font-semibold text-primary">#${shortId}</td>
                     <td class="px-6 py-4"><p class="font-semibold">${l.nama_pelanggan || 'Umum'}</p></td>
                     <td class="px-6 py-4"><span class="px-3 py-1 bg-[#BBF7D0] text-[#15803D] rounded-pill text-xs font-medium">Selesai</span></td>
                     <td class="px-6 py-4 text-center">
-                        <button type="button" onclick="showDigitalNotes(${l.id_servis})" class="text-secondary hover:text-primary transition-colors">
+                        <button type="button" onclick="showDigitalNotes('${l.id_servis}')" class="text-secondary hover:text-primary transition-colors">
                             <span class="material-symbols-outlined">visibility</span>
                         </button>
                     </td>
-                </tr>
-            `).join('') || '<tr><td colspan="4" class="p-6 text-center text-gray-500">Belum ada transaksi</td></tr>';
+                </tr>`;
+            }).join('') || '<tr><td colspan="4" class="p-6 text-center text-gray-500">Belum ada transaksi</td></tr>';
         } catch (e) {}
     }
 

@@ -6,7 +6,6 @@
         <p class="text-gray-500 mt-1 text-sm"></p>
     </div>
 
-    <!-- STATS CARDS -->
     <section class="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div class="lf-card flex flex-col justify-center">
             <p class="text-sm text-gray-500 font-medium mb-2">Total Nota</p>
@@ -26,11 +25,9 @@
         </div>
     </section>
 
-    <!-- CONTENT WORKSPACE -->
     <div class="grid grid-cols-12 gap-8">
         <div class="col-span-12 lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-8">
 
-            <!-- BUKA NOTA -->
             <div class="lf-card flex flex-col h-full">
                 <div class="flex items-center gap-2 mb-6">
                     <div class="w-10 h-10 rounded-md bg-[#FFF7ED] flex items-center justify-center text-primary"><span class="material-symbols-outlined">receipt</span></div>
@@ -46,7 +43,6 @@
                 <button type="button" onclick="prosesNota()" class="lf-btn-primary w-full py-3 mt-6 font-semibold">Buat Nota</button>
             </div>
 
-            <!-- PASANG PART (DROPDOWN) -->
             <div class="lf-card flex flex-col h-full">
                 <div class="flex items-center gap-2 mb-6">
                     <div class="w-10 h-10 rounded-md bg-blue-50 flex items-center justify-center text-secondary"><span class="material-symbols-outlined">build</span></div>
@@ -54,7 +50,7 @@
                 </div>
                 <div class="space-y-4 flex-1">
                     <div id="msgPart" class="text-sm font-bold text-[#15803D] h-4"></div>
-                    <input type="number" id="notaId" class="lf-input w-full" placeholder="Nomor Nota Target">
+                    <input type="text" id="notaId" class="lf-input w-full" placeholder="ID Nota Target">
                     <select id="selPart" class="lf-input w-full">
                         <option value="" disabled selected>Memuat Data Gudang...</option>
                     </select>
@@ -63,18 +59,16 @@
                 <button type="button" onclick="tambahPart()" class="lf-btn-secondary w-full py-3 mt-6 font-semibold">Pasang Sparepart</button>
             </div>
 
-            <!-- KASIR & TAGIHAN -->
             <div class="lf-card col-span-1 md:col-span-2">
                 <h4 class="font-headline text-lg font-semibold text-gray-800 mb-4">Kasir & Tagihan</h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input type="number" id="cariId" class="lf-input w-full" placeholder="Nomor Nota">
+                    <input type="text" id="cariId" class="lf-input w-full" placeholder="ID Nota">
                     <input type="number" id="diskon" class="lf-input w-full" value="0" placeholder="Diskon (Rp)">
                 </div>
                 <button type="button" onclick="cariStruk()" class="lf-btn-primary w-full py-3 mt-4 font-semibold text-sm">Buka & Cetak Kasir</button>
             </div>
         </div>
 
-        <!-- REKAP PANELS (Kanan) -->
         <div class="col-span-12 lg:col-span-4 space-y-8">
             <div class="lf-card p-0 overflow-hidden">
                 <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
@@ -94,7 +88,6 @@
         </div>
     </div>
 
-    <!-- MODAL INVOICE -->
     <div id="strukModal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-sm z-[60] hidden">
         <div class="lf-card font-mono text-sm border-2 border-primary">
             <div class="text-center border-b border-gray-200 pb-4 mb-4">
@@ -123,17 +116,30 @@
 <script>
     const API = window.location.origin + "/api";
 
-    function alertMsg(id, txt, ok=true) {
-        const e = document.getElementById(id); if(!e) return;
-        e.innerText = txt; e.className = `text-sm font-bold h-4 ${ok?'text-[#15803D]':'text-[#EF4444]'}`;
+    function alertMsg(id, txt, ok = true) {
+        const e = document.getElementById(id);
+        if (!e) return;
+        e.innerText = txt;
+        e.className = `text-sm font-bold h-4 ${ok ? 'text-[#15803D]' : 'text-[#EF4444]'}`;
         setTimeout(() => e.innerText = "", 4000);
     }
-    function openModal(id) { document.getElementById('overlay').classList.remove('hidden'); document.getElementById(id).classList.remove('hidden'); }
-    function closeModal(id) { document.getElementById('overlay').classList.add('hidden'); document.getElementById(id).classList.add('hidden'); }
+
+    function openModal(id) {
+        const overlay = document.getElementById('overlay');
+        if (overlay) overlay.classList.remove('hidden');
+        document.getElementById(id).classList.remove('hidden');
+    }
+
+    function closeModal(id) {
+        const overlay = document.getElementById('overlay');
+        if (overlay) overlay.classList.add('hidden');
+        document.getElementById(id).classList.add('hidden');
+    }
 
     async function loadStats() {
         try {
-            const res = await fetch(`${API}/dashboard-stats`); if(!res.ok) return;
+            const res = await fetch(`${API}/dashboard-stats`);
+            if (!res.ok) return;
             const d = await res.json();
 
             document.getElementById('valNota').innerText = d.total_nota;
@@ -155,59 +161,130 @@
                     <p class="truncate text-white"><span class="font-semibold text-blue-100">${meks[p.id_mekanik] || 'Mekanik'}:</span> ${p.merk_kendaraan}</p>
                 </div>
             `).join('') || '<p class="text-sm text-blue-100">Pit Kosong</p>';
-        } catch(e){}
+        } catch (e) {
+            console.error(e);
+        }
     }
 
     async function loadJasa() {
-        const res = await fetch(`${API}/master-jasa`); const d = await res.json();
-        let o = '<option value="" disabled selected>Pilih Layanan...</option>';
-        d.forEach(j => o += `<option value="${j.nama_layanan}" data-harga="${j.biaya_standar}" data-mek="${j.id_mekanik_default}">${j.nama_layanan}</option>`);
-        document.getElementById('selJasa').innerHTML = o;
+        try {
+            const res = await fetch(`${API}/master-jasa`);
+            const d = await res.json();
+            let o = '<option value="" disabled selected>Pilih Layanan...</option>';
+            d.forEach(j => {
+                const harga = j.biaya_standar || 0;
+                const mek = j.id_mekanik_default || "";
+                o += `<option value="${j.nama_layanan}" data-harga="${harga}" data-mek="${mek}">${j.nama_layanan}</option>`;
+            });
+            document.getElementById('selJasa').innerHTML = o;
+        } catch (e) {
+            console.error(e);
+        }
     }
-    function syncJasa() { const s = document.getElementById('selJasa').selectedOptions[0]; if(s){ document.getElementById('biaya').value = s.dataset.harga; document.getElementById('idMek').value = s.dataset.mek; } }
+
+    function syncJasa() {
+        const s = document.getElementById('selJasa').selectedOptions[0];
+        if (s) {
+            document.getElementById('biaya').value = (s.dataset.harga && s.dataset.harga !== "undefined") ? s.dataset.harga : 0;
+            document.getElementById('idMek').value = (s.dataset.mek && s.dataset.mek !== "undefined") ? s.dataset.mek : "";
+        }
+    }
 
     async function prosesNota() {
-        const p = { id_kendaraan: parseInt(document.getElementById('idKen').value), id_mekanik: parseInt(document.getElementById('idMek').value), jenis_servis: document.getElementById('selJasa').value, biaya_jasa: parseFloat(document.getElementById('biaya').value) };
-        const res = await fetch(`${API}/servis`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) }); const out = await res.json();
-        if(res.ok) { alertMsg('msgNota', `NOTA #JS-${out.id_servis} BERHASIL`); document.getElementById('notaId').value = out.id_servis; document.getElementById('cariId').value = out.id_servis; loadStats(); } else alertMsg('msgNota', 'Gagal memproses antrean', false);
+        const p = {
+            id_kendaraan: parseInt(document.getElementById('idKen').value),
+            id_mekanik: parseInt(document.getElementById('idMek').value),
+            jenis_servis: document.getElementById('selJasa').value,
+            biaya_jasa: parseFloat(document.getElementById('biaya').value) || 0
+        };
+        const res = await fetch(`${API}/servis`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(p)
+        });
+        const out = await res.json();
+        if (res.ok) {
+            alertMsg('msgNota', `NOTA BERHASIL DIBUAT`);
+            
+            // --- UBAH DI SINI AGAR YANG MUNCUL NOMOR SIMPEL BUKAN KODE RANDOM MONGODB ---
+            document.getElementById('notaId').value = out.no_nota; // Muncul angka simpel (Cth: 3)
+            document.getElementById('cariId').value = out.no_nota; // Muncul angka simpel (Cth: 3)
+            
+            loadStats();
+        } else {
+            alertMsg('msgNota', 'Gagal memproses antrean', false);
+        }
     }
-
+    
     async function loadSpareparts() {
         try {
-            const res = await fetch(`${API}/list-sparepart`); const d = await res.json();
+            const res = await fetch(`${API}/list-sparepart`);
+            const d = await res.json();
             let o = '<option value="" disabled selected>Pilih Sparepart...</option>';
-            d.forEach(p => o += `<option value="${p.id_sparepart}">${p.nama_sparepart} (Sisa: ${p.stok})</option>`);
+            d.forEach(p => o += `<option value="${p._id}">${p.nama_sparepart} (Sisa: ${p.stok})</option>`);
             document.getElementById('selPart').innerHTML = o;
-        } catch (e) {}
+        } catch (e) {
+            console.error(e);
+        }
     }
 
     async function tambahPart() {
         const selectValue = document.getElementById('selPart').value;
-        if(!selectValue) { alertMsg('msgPart', 'Pilih part dahulu!', false); return; }
-        const p = { id_sparepart: parseInt(selectValue), jumlah: parseInt(document.getElementById('qty').value) };
-        const res = await fetch(`${API}/servis/${document.getElementById('notaId').value}/sparepart`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) });
-        if(res.ok) { alertMsg('msgPart', 'BERHASIL DIPASANG'); loadStats(); loadSpareparts(); } else alertMsg('msgPart', 'Gagal dipasang', false);
+        if (!selectValue) {
+            alertMsg('msgPart', 'Pilih part dahulu!', false);
+            return;
+        }
+        const p = {
+            id_sparepart: selectValue,
+            jumlah: parseInt(document.getElementById('qty').value)
+        };
+        const res = await fetch(`${API}/servis/${document.getElementById('notaId').value}/sparepart`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(p)
+        });
+        if (res.ok) {
+            alertMsg('msgPart', 'BERHASIL DIPASANG');
+            loadStats();
+            loadSpareparts();
+        } else {
+            alertMsg('msgPart', 'Gagal dipasang', false);
+        }
     }
 
     async function cariStruk() {
-        const id = document.getElementById('cariId').value; const diskon = parseFloat(document.getElementById('diskon').value) || 0;
-        if(!id) return;
-        const res = await fetch(`${API}/servis/${id}/tagihan`); if(!res.ok) { alert("Tidak ditemukan!"); return; }
-        const d = await res.json(); const meks = { 1: "Agus (Pit 1)", 2: "Budi (Pit 2)", 3: "Anton (Pit 3)" };
+        const id = document.getElementById('cariId').value;
+        const diskon = parseFloat(document.getElementById('diskon').value) || 0;
+        if (!id) return;
+        
+        const res = await fetch(`${API}/servis/${id}/tagihan`);
+        if (!res.ok) {
+            alert("Tidak ditemukan!");
+            return;
+        }
+        
+        const d = await res.json();
+        const meks = { 1: "Agus (Pit 1)", 2: "Budi (Pit 2)", 3: "Anton (Pit 3)" };
 
-        document.getElementById('sId').innerText = "#JS-" + d.nota.id_servis;
+        document.getElementById('sId').innerText = "#" + d.nota.no_nota;
         document.getElementById('sNama').innerText = d.kendaraan.nama_pelanggan || 'Umum';
         document.getElementById('sMek').innerText = meks[d.nota.id_mekanik] || 'Mekanik';
 
         let html = `<div class="flex justify-between font-semibold"><span>${d.nota.jenis_servis}</span><span>Rp ${d.nota.biaya_jasa.toLocaleString('id-ID')}</span></div>`;
-        d.sparepart.forEach(p => html += `<div class="flex justify-between text-gray-500 pl-2"><span>+ ${p.nama_sparepart} (x${p.jumlah})</span><span>Rp ${p.subtotal.toLocaleString('id-ID')}</span></div>`);
+        d.sparepart.forEach(p => {
+            html += `<div class="flex justify-between text-gray-500 pl-2"><span>+ ${p.nama_sparepart} (x${p.jumlah})</span><span>Rp ${p.subtotal.toLocaleString('id-ID')}</span></div>`;
+        });
 
         document.getElementById('listRincianPart').innerHTML = html;
         document.getElementById('sTotal').innerText = "Rp " + (d.grand_total - diskon).toLocaleString('id-ID');
         openModal('strukModal');
     }
 
-    window.onload = () => { loadStats(); loadJasa(); loadSpareparts(); };
+    window.onload = () => {
+        loadStats();
+        loadJasa();
+        loadSpareparts();
+    };
     setInterval(loadStats, 5000);
 </script>
 @endpush

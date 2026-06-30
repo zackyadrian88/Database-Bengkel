@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use MongoDB\Laravel\Eloquent\Model;
 
 class MasterJasa extends Model
 {
     use HasFactory;
 
-    // Tabel ini juga menggunakan nama ID bawaan Laravel yaitu 'id'
+    protected $connection = 'mongodb';
+    protected $collection = 'master_jasas';
 
     // Mengizinkan semua kolom diisi secara massal
     protected $guarded = [];
