@@ -25,6 +25,10 @@ Route::prefix('api')->group(function () {
     Route::post('/servis', [BengkelController::class, 'bukaNota']);
     Route::post('/servis/{id_servis}/sparepart', [BengkelController::class, 'pasangSparepart']);
     Route::get('/servis/{id_servis}/tagihan', [BengkelController::class, 'cetakTagihan']);
+    Route::post('/servis/{id_servis}/selesai', [BengkelController::class, 'selesaiServis']);
+    Route::get('/cari-riwayat', [BengkelController::class, 'cariRiwayat']);
+    Route::get('/validasi-nota/{id}', [BengkelController::class, 'validasiNota']);
+    Route::get('/antrean-aktif', [BengkelController::class, 'antreanAktif']);
 
     // Warehouse Data
     Route::post('/tambah-barang', [BengkelController::class, 'tambahBarang']);

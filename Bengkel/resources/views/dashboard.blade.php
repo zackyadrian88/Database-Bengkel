@@ -1,126 +1,250 @@
 @extends('layouts.app')
 
 @section('content')
-    <div class="mb-8">
-        <h2 class="font-headline text-3xl font-bold text-gray-800">Rekap Data Penjualan</h2>
-        <p class="text-gray-500 mt-1 text-sm"></p>
+<div class="flex h-full w-full gap-6 p-6">
+    
+    <!-- CENTER PANEL (MAIN CONTENT) -->
+    <div class="flex-1 flex flex-col h-full">
+        <!-- HEADER -->
+        <header class="flex justify-between items-center mb-8 gap-6">
+            <div class="font-headline font-bold text-primary text-xl tracking-wide shrink-0">JEKI SPEED</div>
+            
+            <div class="relative flex-1 max-w-md z-[60]">
+                <input id="searchInput" oninput="doSearch(this.value)" class="peer w-full pl-6 pr-14 bg-bgPanel border border-borderPanel rounded-full py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-textMain placeholder-textSec" placeholder="Cari Plat Nomor / ID Nota..." type="text" autocomplete="off"/>
+                <button class="absolute right-1.5 top-1.5 w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white shadow-md hover:bg-primaryHover transition">
+                    <span class="material-symbols-outlined text-[18px]">search</span>
+                </button>
+
+                <!-- Search Dropdown (Dynamic) -->
+                <div id="searchDropdown" class="absolute top-14 left-0 w-full bg-bgPanel border border-borderPanel rounded-2xl shadow-2xl py-2 flex-col gap-1 z-[60] hidden peer-focus:flex hover:flex">
+                    <div id="searchResults" class="max-h-64 overflow-y-auto">
+                        <div class="px-5 py-3 text-xs text-textSec text-center">Ketik untuk mencari...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2 bg-bgPanel border border-borderPanel px-5 py-2.5 rounded-full text-sm font-medium text-textMain shrink-0">
+                <span id="currentTime">09:30 AM</span> 
+                <span class="text-textSec font-normal mx-1">|</span>
+                <span id="currentDate" class="text-textSec">Friday, 7 Aug 2026</span>
+            </div>
+        </header>
+        
+        <!-- SUMMARY CARDS -->
+        <section class="grid grid-cols-3 gap-4 mb-8">
+            <!-- Card 1 -->
+            <div class="lf-card !p-5 flex flex-col justify-center relative overflow-hidden group">
+                <p class="text-[13px] text-textSec font-medium mb-1 group-hover:text-textMain transition-colors">Servis Selesai</p>
+                <h3 class="text-3xl font-bold text-textMain mb-2" id="valNota">0</h3>
+                <div class="flex items-center gap-1 text-[11px] font-semibold text-statusEmerald">
+                    <span class="material-symbols-outlined text-[14px]">trending_up</span> +0%
+                </div>
+            </div>
+            
+            <!-- Card 2 -->
+            <div class="lf-card !p-5 flex flex-col justify-center relative overflow-hidden group">
+                <p class="text-[13px] text-textSec font-medium mb-1 group-hover:text-textMain transition-colors">Rata-rata Waktu Servis</p>
+                <div class="flex items-end gap-1 mb-2">
+                    <h3 class="text-3xl font-bold text-textMain" id="valStokLow">0</h3>
+                    <span class="text-sm font-semibold text-textMain mb-1">min</span>
+                </div>
+                <div class="flex items-center gap-1 text-[11px] font-semibold text-statusEmerald">
+                    <span class="material-symbols-outlined text-[14px]">trending_down</span> 0%
+                </div>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="lf-card !p-5 flex flex-col justify-center relative overflow-hidden group">
+                <p class="text-[13px] text-textSec font-medium mb-1 group-hover:text-textMain transition-colors">Pendapatan Hari Ini</p>
+                <h3 class="text-2xl font-bold text-statusEmerald mb-2 truncate" id="valPendapatan">Rp 0</h3>
+                <div class="flex items-center gap-1 text-[11px] font-semibold text-statusEmerald">
+                    <span class="material-symbols-outlined text-[14px]">account_balance_wallet</span> Total Omset
+                </div>
+            </div>
+        </section>
+
+        <!-- FLEX CONTAINER FOR MAIN & RIGHT PANEL -->
+        <div class="flex flex-row gap-6 pb-6 w-full">
+            <!-- MAIN FORMS -->
+            <div class="flex-1 min-w-0">
+                <div class="grid grid-cols-3 gap-6">
+                    <!-- CARD 1: BUKA NOTA BARU -->
+                    <div class="lf-card p-6 flex flex-col">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-12 h-12 rounded-2xl bg-primary bg-opacity-15 border border-primary border-opacity-20 text-primary flex items-center justify-center shrink-0" style="min-width: 48px; min-height: 48px;">
+                            <span class="material-symbols-outlined text-[24px]">receipt_long</span>
+                        </div>
+                        <div>
+                            <h3 class="font-headline font-bold text-lg text-textMain">Buka Nota Baru</h3>
+                            <p class="text-[11px] text-textSec">Buat SPK untuk pelanggan baru</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4 flex-1">
+                        <div>
+                            <label class="text-[11px] text-textSec mb-1.5 block uppercase tracking-wider font-semibold">ID Antrean / Kendaraan</label>
+                            <input type="number" id="idKen" class="lf-input w-full" placeholder="Masukkan ID">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-textSec mb-1.5 block uppercase tracking-wider font-semibold">Pilih Layanan</label>
+                            <select id="selJasa" onchange="syncJasa()" class="lf-input w-full [&>option]:bg-bgPanel"></select>
+                            <input type="hidden" id="idMek">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-textSec mb-1.5 block uppercase tracking-wider font-semibold">Biaya Jasa (Rp)</label>
+                            <input type="number" id="biaya" class="lf-input w-full opacity-70 cursor-not-allowed" readonly value="0">
+                        </div>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-borderPanel flex flex-col gap-2">
+                        <button type="button" onclick="prosesNota()" class="lf-btn-primary w-full py-3 h-auto text-[14px] font-bold">Buat Nota</button>
+                        <div class="h-4 text-center"><span id="msgNota" class="text-xs font-bold text-statusEmerald"></span></div>
+                    </div>
+                </div>
+
+                <!-- CARD 2: INPUT SPAREPART -->
+                <div class="lf-card p-6 flex flex-col">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-12 h-12 rounded-2xl bg-[#3182CE] bg-opacity-15 border border-[#3182CE] border-opacity-20 text-[#3182CE] flex items-center justify-center shrink-0" style="min-width: 48px; min-height: 48px;">
+                            <span class="material-symbols-outlined text-[24px]">build</span>
+                        </div>
+                        <div>
+                            <h3 class="font-headline font-bold text-lg text-textMain">Input Sparepart</h3>
+                            <p class="text-[11px] text-textSec">Pasang suku cadang ke kendaraan</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4 flex-1">
+                        <div>
+                            <label class="text-[11px] text-textSec mb-1.5 block uppercase tracking-wider font-semibold">ID Nota Target</label>
+                            <input type="text" id="notaId" oninput="validasiNotaRealtime(this.value, 'valPartInfo')" class="lf-input w-full" placeholder="ID Nota">
+                            <div id="valPartInfo" class="hidden"></div>
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-textSec mb-1.5 block uppercase tracking-wider font-semibold">Pilih Suku Cadang</label>
+                            <select id="selPart" class="lf-input w-full [&>option]:bg-bgPanel">
+                                <option value="" disabled selected>Memuat Part...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-textSec mb-1.5 block uppercase tracking-wider font-semibold">Jumlah Pemasangan</label>
+                            <input type="number" id="qty" class="lf-input w-full" value="1" min="1">
+                        </div>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-borderPanel flex flex-col gap-2">
+                        <button type="button" onclick="tambahPart()" class="lf-btn-primary !bg-[#3182CE] hover:!bg-[#2B6CB0] w-full py-3 h-auto text-[14px] font-bold">Pasang Sparepart</button>
+                        <div class="h-4 text-center"><span id="msgPart" class="text-xs font-bold text-[#3182CE]"></span></div>
+                    </div>
+                </div>
+
+                <!-- CARD 3: KASIR & TAGIHAN -->
+                <div class="lf-card p-6 flex flex-col">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-12 h-12 rounded-2xl bg-[#48BB78] bg-opacity-15 border border-[#48BB78] border-opacity-20 text-[#48BB78] flex items-center justify-center shrink-0" style="min-width: 48px; min-height: 48px;">
+                            <span class="material-symbols-outlined text-[24px]">point_of_sale</span>
+                        </div>
+                        <div>
+                            <h3 class="font-headline font-bold text-lg text-textMain">Kasir & Tagihan</h3>
+                            <p class="text-[11px] text-textSec">Proses pembayaran dan cetak struk</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4 flex-1">
+                        <div>
+                            <label class="text-[11px] text-textSec mb-1.5 block uppercase tracking-wider font-semibold">ID Nota</label>
+                            <input type="text" id="tNota" oninput="validasiNotaRealtime(this.value, 'valKasirInfo')" class="lf-input w-full" placeholder="ID Nota untuk dicetak">
+                            <div id="valKasirInfo" class="hidden"></div>
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-textSec mb-1.5 block uppercase tracking-wider font-semibold">Diskon Tambahan (Rp)</label>
+                            <input type="number" id="diskon" class="lf-input w-full" value="0">
+                        </div>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-borderPanel flex flex-col gap-2">
+                        <button type="button" onclick="cariStruk()" class="lf-btn-primary !bg-[#48BB78] hover:!bg-[#38A169] w-full py-3 h-auto text-[14px] font-bold">Buka & Cetak Kasir</button>
+                        <div class="h-4"></div>
+                    </div>
+                </div>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL: ANTREAN AKTIF -->
+            <aside class="w-[280px] shrink-0 flex flex-col gap-6">
+                <div class="lf-card p-6 flex flex-col min-h-[400px]">
+                    <h3 class="font-headline font-bold text-lg text-textMain mb-4 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">queue_music</span>
+                        Antrean Aktif
+                        <div class="ml-auto flex items-center gap-1 text-[10px] font-semibold text-textSec bg-bgHover px-2 py-1 rounded-full">
+                            <span class="w-1.5 h-1.5 rounded-full bg-statusEmerald animate-pulse"></span>
+                            Live
+                        </div>
+                    </h3>
+                    <div class="flex-1 overflow-y-auto pr-1 flex flex-col gap-3 custom-scrollbar" id="queueListBody">
+                        <div class="text-center text-textSec text-xs py-4">Memuat antrean...</div>
+                    </div>
+                </div>
+            </aside>
+        </div>
     </div>
+</div>
 
-    <section class="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div class="lf-card flex flex-col justify-center">
-            <p class="text-sm text-gray-500 font-medium mb-2">Total Nota</p>
-            <h3 class="text-4xl font-headline font-bold text-primary" id="valNota">0</h3>
-        </div>
-        <div class="lf-card flex flex-col justify-center">
-            <p class="text-sm text-gray-500 font-medium mb-2">Part Terpasang</p>
-            <h3 class="text-4xl font-headline font-bold text-secondary" id="valPart">0</h3>
-        </div>
-        <div class="lf-card flex flex-col justify-center">
-            <p class="text-sm text-gray-500 font-medium mb-2">Pendapatan</p>
-            <h3 class="text-2xl font-mono font-bold text-tertiary mt-2" id="valPendapatan">Rp 0</h3>
-        </div>
-        <div class="lf-card flex flex-col justify-center border-l-4 border-error">
-            <p class="text-sm text-gray-500 font-medium mb-2">Stok Menipis</p>
-            <h3 class="text-4xl font-headline font-bold text-error" id="valStokLow">0</h3>
-        </div>
-    </section>
-
-    <div class="grid grid-cols-12 gap-8">
-        <div class="col-span-12 lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-
-            <div class="lf-card flex flex-col h-full">
-                <div class="flex items-center gap-2 mb-6">
-                    <div class="w-10 h-10 rounded-md bg-[#FFF7ED] flex items-center justify-center text-primary"><span class="material-symbols-outlined">receipt</span></div>
-                    <h4 class="font-headline text-lg font-semibold text-gray-800">Buka Nota Baru</h4>
-                </div>
-                <div class="space-y-4 flex-1">
-                    <div id="msgNota" class="text-sm font-bold text-[#15803D] h-4"></div>
-                    <input type="number" id="idKen" class="lf-input w-full" placeholder="Masukkan No. Antrean Kios (Cth: 1, 2, 3)">
-                    <select id="selJasa" onchange="syncJasa()" class="lf-input w-full"></select>
-                    <input type="hidden" id="idMek">
-                    <input type="number" id="biaya" class="lf-input w-full bg-gray-50 cursor-not-allowed" readonly placeholder="Biaya Otomatis">
-                </div>
-                <button type="button" onclick="prosesNota()" class="lf-btn-primary w-full py-3 mt-6 font-semibold">Buat Nota</button>
+<!-- STRUK MODAL -->
+<div id="strukModal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-sm z-[60] hidden">
+    <div class="lf-card shadow-2xl relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-1 bg-primary"></div>
+        <div class="p-6 font-mono text-sm">
+            <div class="text-center border-b border-dashed border-borderPanel pb-4 mb-4 mt-2">
+                <h2 class="font-headline text-2xl font-bold text-textMain">JEKI SPEED</h2>
+                <p class="text-xs text-textSec">Struk Pembayaran</p>
             </div>
-
-            <div class="lf-card flex flex-col h-full">
-                <div class="flex items-center gap-2 mb-6">
-                    <div class="w-10 h-10 rounded-md bg-blue-50 flex items-center justify-center text-secondary"><span class="material-symbols-outlined">build</span></div>
-                    <h4 class="font-headline text-lg font-semibold text-gray-800">Input Sparepart</h4>
-                </div>
-                <div class="space-y-4 flex-1">
-                    <div id="msgPart" class="text-sm font-bold text-[#15803D] h-4"></div>
-                    <input type="text" id="notaId" class="lf-input w-full" placeholder="ID Nota Target">
-                    <select id="selPart" class="lf-input w-full">
-                        <option value="" disabled selected>Memuat Data Gudang...</option>
-                    </select>
-                    <input type="number" id="qty" class="lf-input w-full" placeholder="Jumlah Pemasangan" value="1" min="1">
-                </div>
-                <button type="button" onclick="tambahPart()" class="lf-btn-secondary w-full py-3 mt-6 font-semibold">Pasang Sparepart</button>
+            <div class="space-y-1 text-textSec mb-4 text-xs">
+                <p>Nota: <span id="sId" class="font-bold text-textMain"></span></p>
+                <p>Cust: <span id="sNama" class="font-bold text-textMain"></span></p>
+                <p>Mek : <span id="sMek" class="text-textMain"></span></p>
             </div>
-
-            <div class="lf-card col-span-1 md:col-span-2">
-                <h4 class="font-headline text-lg font-semibold text-gray-800 mb-4">Kasir & Tagihan</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input type="text" id="cariId" class="lf-input w-full" placeholder="ID Nota">
-                    <input type="number" id="diskon" class="lf-input w-full" value="0" placeholder="Diskon (Rp)">
-                </div>
-                <button type="button" onclick="cariStruk()" class="lf-btn-primary w-full py-3 mt-4 font-semibold text-sm">Buka & Cetak Kasir</button>
-            </div>
-        </div>
-
-        <div class="col-span-12 lg:col-span-4 space-y-8">
-            <div class="lf-card p-0 overflow-hidden">
-                <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                    <h4 class="font-headline text-base font-semibold text-gray-800">Peringatan Stok</h4>
-                </div>
-                <div class="p-6 max-h-[250px] overflow-y-auto space-y-4" id="listStokLow">
-                    <p class="text-sm text-gray-500 text-center">Memuat info gudang...</p>
-                </div>
-            </div>
-
-            <div class="lf-card bg-secondary text-white border-none p-6">
-                <h4 class="font-headline text-base font-semibold mb-4 text-white">Workshop Monitor</h4>
-                <div class="space-y-3" id="listPitAktif">
-                    <p class="text-sm text-blue-100">Memuat antrean...</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="strukModal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-sm z-[60] hidden">
-        <div class="lf-card font-mono text-sm border-2 border-primary">
-            <div class="text-center border-b border-gray-200 pb-4 mb-4">
-                <h2 class="font-headline text-2xl font-bold text-primary">JEKI SPEED</h2>
-                <p class="text-xs text-gray-500">Struk Pembayaran</p>
-            </div>
-            <div class="space-y-1 text-gray-600 mb-4">
-                <p>Nota: <span id="sId" class="font-bold text-gray-800"></span></p>
-                <p>Cust: <span id="sNama" class="font-bold text-gray-800"></span></p>
-                <p>Mek : <span id="sMek"></span></p>
-            </div>
-            <div id="listRincianPart" class="space-y-2 border-b border-gray-200 pb-4 mb-4 text-xs"></div>
+            <div id="listRincianPart" class="space-y-2 border-b border-dashed border-borderPanel pb-4 mb-4 text-xs text-textMain"></div>
             <div class="flex justify-between items-center mb-6">
-                <span class="font-bold text-gray-600 uppercase">Total</span>
+                <span class="font-bold text-textSec uppercase">Total</span>
                 <span id="sTotal" class="text-lg font-bold text-primary"></span>
             </div>
             <div class="flex gap-4 font-body">
-                <button type="button" onclick="window.print()" class="lf-btn-secondary w-full py-2">Cetak</button>
-                <button type="button" onclick="closeModal('strukModal')" class="lf-btn-primary w-full py-2">Selesai</button>
+                <button type="button" onclick="window.print()" class="lf-btn-secondary w-full py-2.5">Cetak</button>
+                <button type="button" onclick="tandaiSelesai()" class="lf-btn-primary w-full py-2.5">Selesai</button>
             </div>
         </div>
     </div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
     const API = window.location.origin + "/api";
 
+    // Set Current Time and Date
+    function updateDateTime() {
+        const now = new Date();
+        const timeEl = document.getElementById('currentTime');
+        const dateEl = document.getElementById('currentDate');
+        if(timeEl) timeEl.innerText = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        if(dateEl) dateEl.innerText = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+    }
+    setInterval(updateDateTime, 1000);
+    updateDateTime();
+
     function alertMsg(id, txt, ok = true) {
         const e = document.getElementById(id);
         if (!e) return;
+        
         e.innerText = txt;
-        e.className = `text-sm font-bold h-4 ${ok ? 'text-[#15803D]' : 'text-[#EF4444]'}`;
+        if (id === 'msgNota') {
+            e.className = `text-xs font-bold ${ok ? 'text-statusEmerald' : 'text-statusRed'}`;
+        } else if (id === 'msgPart') {
+            e.className = `text-xs font-bold ${ok ? 'text-statusEmerald' : 'text-statusRed'}`;
+        } else {
+            e.className = `text-xs font-bold ${ok ? 'text-statusEmerald' : 'text-statusRed'}`;
+        }
         setTimeout(() => e.innerText = "", 4000);
     }
 
@@ -142,25 +266,9 @@
             if (!res.ok) return;
             const d = await res.json();
 
-            document.getElementById('valNota').innerText = d.total_nota;
-            document.getElementById('valPart').innerText = d.part_terpasang;
-            document.getElementById('valPendapatan').innerText = "Rp " + d.total_pendapatan.toLocaleString('id-ID');
-            document.getElementById('valStokLow').innerText = d.stok_menipis_count;
-
-            document.getElementById('listStokLow').innerHTML = d.stok_menipis_items.map(i => `
-                <div class="flex justify-between items-center text-sm">
-                    <span class="font-medium text-gray-700">${i.nama_sparepart}</span>
-                    <span class="px-3 py-1 bg-[#FEF2F2] text-[#EF4444] rounded-pill text-xs font-semibold">Sisa ${i.stok}</span>
-                </div>
-            `).join('') || '<p class="text-center text-gray-500 text-sm">Stok Gudang Aman</p>';
-
-            const meks = { 1: "Agus (Pit 1)", 2: "Budi (Pit 2)", 3: "Anton (Pit 3)" };
-            document.getElementById('listPitAktif').innerHTML = d.active_pits.map(p => `
-                <div class="flex items-center gap-3 text-sm">
-                    <div class="w-3 h-3 rounded-circle bg-[#22C55E]"></div>
-                    <p class="truncate text-white"><span class="font-semibold text-blue-100">${meks[p.id_mekanik] || 'Mekanik'}:</span> ${p.merk_kendaraan}</p>
-                </div>
-            `).join('') || '<p class="text-sm text-blue-100">Pit Kosong</p>';
+            if (document.getElementById('valNota')) document.getElementById('valNota').innerText = d.total_nota;
+            if (document.getElementById('valStokLow')) document.getElementById('valStokLow').innerText = d.rata_waktu_servis || 0;
+            if (document.getElementById('valPendapatan')) document.getElementById('valPendapatan').innerText = "Rp " + parseInt(d.total_pendapatan).toLocaleString(); 
         } catch (e) {
             console.error(e);
         }
@@ -171,7 +279,8 @@
             const res = await fetch(`${API}/master-jasa`);
             const d = await res.json();
             let o = '<option value="" disabled selected>Pilih Layanan...</option>';
-            d.forEach(j => {
+            const arr = Array.isArray(d) ? d : Object.values(d);
+            arr.forEach(j => {
                 const harga = j.biaya_standar || 0;
                 const mek = j.id_mekanik_default || "";
                 o += `<option value="${j.nama_layanan}" data-harga="${harga}" data-mek="${mek}">${j.nama_layanan}</option>`;
@@ -204,15 +313,12 @@
         });
         const out = await res.json();
         if (res.ok) {
-            alertMsg('msgNota', `NOTA BERHASIL DIBUAT`);
-            
-            // --- UBAH DI SINI AGAR YANG MUNCUL NOMOR SIMPEL BUKAN KODE RANDOM MONGODB ---
-            document.getElementById('notaId').value = out.no_nota; // Muncul angka simpel (Cth: 3)
-            document.getElementById('cariId').value = out.no_nota; // Muncul angka simpel (Cth: 3)
-            
+            alertMsg('msgNota', `BERHASIL!`);
+            document.getElementById('notaId').value = out.no_nota;
+            document.getElementById('tNota').value = out.no_nota;
             loadStats();
         } else {
-            alertMsg('msgNota', 'Gagal memproses antrean', false);
+            alertMsg('msgNota', 'Gagal!', false);
         }
     }
     
@@ -220,8 +326,9 @@
         try {
             const res = await fetch(`${API}/list-sparepart`);
             const d = await res.json();
-            let o = '<option value="" disabled selected>Pilih Sparepart...</option>';
-            d.forEach(p => o += `<option value="${p._id}">${p.nama_sparepart} (Sisa: ${p.stok})</option>`);
+            let o = '<option value="" disabled selected>Pilih Part...</option>';
+            const arr = Array.isArray(d) ? d : Object.values(d);
+            arr.forEach(p => o += `<option value="${p._id}">${p.nama_sparepart} (Sisa: ${p.stok})</option>`);
             document.getElementById('selPart').innerHTML = o;
         } catch (e) {
             console.error(e);
@@ -231,7 +338,7 @@
     async function tambahPart() {
         const selectValue = document.getElementById('selPart').value;
         if (!selectValue) {
-            alertMsg('msgPart', 'Pilih part dahulu!', false);
+            alertMsg('msgPart', 'Pilih part!', false);
             return;
         }
         const p = {
@@ -244,47 +351,205 @@
             body: JSON.stringify(p)
         });
         if (res.ok) {
-            alertMsg('msgPart', 'BERHASIL DIPASANG');
+            alertMsg('msgPart', 'DIPASANG!');
             loadStats();
             loadSpareparts();
         } else {
-            alertMsg('msgPart', 'Gagal dipasang', false);
+            alertMsg('msgPart', 'Gagal!', false);
         }
     }
 
+    let currentStrukId = null;
     async function cariStruk() {
-        const id = document.getElementById('cariId').value;
+        const id = document.getElementById('tNota').value;
         const diskon = parseFloat(document.getElementById('diskon').value) || 0;
         if (!id) return;
         
-        const res = await fetch(`${API}/servis/${id}/tagihan`);
-        if (!res.ok) {
-            alert("Tidak ditemukan!");
+        try {
+            const res = await fetch(`${API}/servis/${id}/tagihan`);
+            if (!res.ok) {
+                alertMsg('msgKasir', 'Nota tidak ditemukan!', false);
+                return;
+            }
+            
+            const d = await res.json();
+            currentStrukId = d.nota.no_nota;
+            const meks = { 1: "Agus (Pit 1)", 2: "Budi (Pit 2)", 3: "Anton (Pit 3)" };
+
+            document.getElementById('sId').innerText = "SPK-" + d.nota.no_nota;
+            document.getElementById('sNama').innerText = d.kendaraan.nama_pelanggan || 'Umum';
+            document.getElementById('sMek').innerText = meks[d.nota.id_mekanik] || 'Mekanik';
+
+            let html = `<div class="flex justify-between font-bold text-textMain"><span>${d.nota.jenis_servis}</span><span>Rp ${d.nota.biaya_jasa.toLocaleString('id-ID')}</span></div>`;
+            d.sparepart.forEach(p => {
+                html += `<div class="flex justify-between text-textSec pl-2 mt-1"><span>+ ${p.nama_sparepart} (x${p.jumlah})</span><span>Rp ${p.subtotal.toLocaleString('id-ID')}</span></div>`;
+            });
+
+            document.getElementById('listRincianPart').innerHTML = html;
+            document.getElementById('sTotal').innerText = "Rp " + (d.grand_total - diskon).toLocaleString('id-ID');
+            openModal('strukModal');
+        } catch(e) {
+            console.error(e);
+        }
+    }
+
+    async function tandaiSelesai() {
+        if (!currentStrukId) {
+            closeModal('strukModal');
             return;
         }
         
-        const d = await res.json();
-        const meks = { 1: "Agus (Pit 1)", 2: "Budi (Pit 2)", 3: "Anton (Pit 3)" };
+        try {
+            const res = await fetch(`${API}/servis/${currentStrukId}/selesai`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (res.ok) {
+                closeModal('strukModal');
+                loadStats();
+                loadAntreanAktif();
+                document.getElementById('tNota').value = '';
+                alertMsg('msgKasir', 'Servis Selesai!');
+            }
+        } catch (e) {
+            console.error(e);
+            closeModal('strukModal');
+        }
+    }
 
-        document.getElementById('sId').innerText = "#" + d.nota.no_nota;
-        document.getElementById('sNama').innerText = d.kendaraan.nama_pelanggan || 'Umum';
-        document.getElementById('sMek').innerText = meks[d.nota.id_mekanik] || 'Mekanik';
+    let searchTimeout;
+    async function doSearch(q) {
+        const resultsDiv = document.getElementById('searchResults');
+        if (!q || q.length < 2) {
+            resultsDiv.innerHTML = '<div class="px-5 py-3 text-xs text-textSec text-center">Ketik minimal 2 karakter...</div>';
+            return;
+        }
+        
+        resultsDiv.innerHTML = '<div class="px-5 py-3 text-xs text-textSec text-center">Mencari...</div>';
+        
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(async () => {
+            try {
+                const res = await fetch(`${API}/cari-riwayat?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                
+                if (!data || data.length === 0) {
+                    resultsDiv.innerHTML = '<div class="px-5 py-3 text-xs text-textSec text-center">Tidak ditemukan.</div>';
+                    return;
+                }
+                
+                let html = '';
+                data.forEach(item => {
+                    const statusColor = item.status === 'Selesai' ? 'text-statusEmerald' : 'text-statusGold';
+                    html += `
+                    <div class="px-5 py-3 hover:bg-bgHover cursor-pointer flex items-center justify-between group transition-colors border-b border-borderPanel last:border-0" onclick="document.getElementById('searchInput').value = '${item.no_nota}'; document.getElementById('tNota').value = '${item.no_nota}'; document.getElementById('notaId').value = '${item.no_nota}';">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                                <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                            </div>
+                            <div>
+                                <p class="text-[13px] font-bold text-textMain group-hover:text-primary transition-colors">SPK-${item.no_nota} <span class="text-textSec font-normal mx-1">|</span> ${item.plat_nomor}</p>
+                                <p class="text-[11px] text-textSec mt-0.5">${item.jenis_servis} • <span class="${statusColor}">${item.status} (${item.tanggal})</span></p>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+                resultsDiv.innerHTML = html;
+            } catch (e) {
+                console.error(e);
+                resultsDiv.innerHTML = '<div class="px-5 py-3 text-xs text-textRed text-center">Terjadi kesalahan.</div>';
+            }
+        }, 500);
+    }
 
-        let html = `<div class="flex justify-between font-semibold"><span>${d.nota.jenis_servis}</span><span>Rp ${d.nota.biaya_jasa.toLocaleString('id-ID')}</span></div>`;
-        d.sparepart.forEach(p => {
-            html += `<div class="flex justify-between text-gray-500 pl-2"><span>+ ${p.nama_sparepart} (x${p.jumlah})</span><span>Rp ${p.subtotal.toLocaleString('id-ID')}</span></div>`;
-        });
+    let valTimeout;
+    async function validasiNotaRealtime(id, targetElementId) {
+        const el = document.getElementById(targetElementId);
+        if (!id) {
+            el.innerHTML = '';
+            el.classList.add('hidden');
+            return;
+        }
+        
+        el.classList.remove('hidden');
+        el.innerHTML = `<div class="p-3 mt-2 bg-bgPanel border border-borderPanel rounded-lg flex items-center gap-3 animate-pulse">
+            <span class="material-symbols-outlined text-textSec text-lg">hourglass_empty</span>
+            <span class="text-xs text-textSec font-medium">Memvalidasi ID...</span>
+        </div>`;
+        
+        clearTimeout(valTimeout);
+        valTimeout = setTimeout(async () => {
+            try {
+                const res = await fetch(`${API}/validasi-nota/${id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    el.innerHTML = `
+                    <div class="p-3 mt-2 bg-statusEmerald/10 border border-statusEmerald/20 rounded-lg flex flex-col gap-1">
+                        <div class="flex items-center gap-2 text-statusEmerald">
+                            <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                            <span class="text-[11px] font-bold uppercase tracking-wider">Nota Valid</span>
+                        </div>
+                        <p class="text-[13px] font-semibold text-textMain mt-1">${data.nama_pelanggan}</p>
+                        <p class="text-[11px] text-textSec font-mono">${data.plat_nomor}</p>
+                    </div>`;
+                } else {
+                    el.innerHTML = `
+                    <div class="p-3 mt-2 bg-statusRed/10 border border-statusRed/20 rounded-lg flex items-center gap-2 text-statusRed">
+                        <span class="material-symbols-outlined text-[16px]">error</span>
+                        <span class="text-xs font-semibold">ID Nota tidak ditemukan</span>
+                    </div>`;
+                }
+            } catch (e) {
+                el.innerHTML = `
+                <div class="p-3 mt-2 bg-statusGold/10 border border-statusGold/20 rounded-lg flex items-center gap-2 text-statusGold">
+                    <span class="material-symbols-outlined text-[16px]">warning</span>
+                    <span class="text-xs font-semibold">Gagal koneksi ke server</span>
+                </div>`;
+            }
+        }, 600);
+    }
 
-        document.getElementById('listRincianPart').innerHTML = html;
-        document.getElementById('sTotal').innerText = "Rp " + (d.grand_total - diskon).toLocaleString('id-ID');
-        openModal('strukModal');
+    async function loadAntreanAktif() {
+        const tbody = document.getElementById('queueListBody');
+        try {
+            const res = await fetch(`${API}/antrean-aktif`);
+            if (res.ok) {
+                const data = await res.json();
+                const arr = Array.isArray(data) ? data : Object.values(data);
+                if (arr.length === 0) {
+                    tbody.innerHTML = '<div class="text-center text-textSec text-xs py-4">Belum ada antrean aktif hari ini.</div>';
+                    return;
+                }
+                
+                let html = '';
+                arr.forEach(item => {
+                    const statusColor = item.status === 'Selesai' ? 'text-statusEmerald bg-statusEmerald/10' : 'text-statusGold bg-statusGold/10';
+                    html += `
+                    <div class="border border-borderPanel/50 rounded-lg p-3 hover:border-primary/50 transition-colors cursor-pointer group bg-[#16161A]">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="inline-flex items-center justify-center bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded">SPK-${item.no_nota}</span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${statusColor}">${item.status}</span>
+                        </div>
+                        <p class="font-semibold text-sm text-textMain group-hover:text-primary transition-colors">${item.nama_pelanggan}</p>
+                        <p class="text-xs text-textSec mb-1">${item.plat_nomor}</p>
+                        <p class="text-[11px] text-textSec border-t border-borderPanel/30 pt-1 mt-1">${item.jenis_servis}</p>
+                    </div>`;
+                });
+                tbody.innerHTML = html;
+            }
+        } catch (e) {
+            console.error(e);
+            tbody.innerHTML = '<div class="text-center text-statusRed text-xs py-4">Gagal memuat antrean.</div>';
+        }
     }
 
     window.onload = () => {
         loadStats();
         loadJasa();
         loadSpareparts();
+        loadAntreanAktif();
+        setInterval(loadStats, 5000);
+        setInterval(loadAntreanAktif, 10000);
     };
-    setInterval(loadStats, 5000);
 </script>
-@endpush

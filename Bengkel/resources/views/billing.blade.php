@@ -1,68 +1,78 @@
 @extends('layouts.app')
 
 @section('content')
-    <div class="mb-8 flex justify-between items-end">
+<div class="h-full w-full max-w-5xl mx-auto flex flex-col p-6">
+    <!-- HEADER -->
+    <div class="mb-6 flex justify-between items-center relative">
         <div>
-            <h2 class="font-headline text-3xl font-bold text-gray-800">Rincian Tagihan</h2>
-            <p class="text-gray-500 mt-1 text-sm">Riwayat tagihan kassa operasional.</p>
+            <h2 class="font-body text-[16px] font-bold text-textMain">Rincian Tagihan</h2>
+            <p class="text-textSec mt-0.5 text-[11px] font-medium">Riwayat tagihan kassa operasional.</p>
         </div>
-        <span class="bg-[#BBF7D0] text-[#15803D] px-4 py-1.5 rounded-pill text-xs font-semibold">Tersinkronisasi</span>
+        
+        <div>
+            <span class="priority-chip success h-[24px] px-3 gap-1">
+                <span class="material-symbols-outlined text-[14px]">cloud_done</span> Tersinkronisasi
+            </span>
+        </div>
     </div>
 
-    <div class="grid grid-cols-12 gap-8">
-        <div class="col-span-12 lg:col-span-7">
-            <div class="lf-card p-0 overflow-hidden">
-                <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                    <h3 class="font-headline text-lg font-semibold text-gray-800">Daftar Tagihan</h3>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead>
-                            <tr class="border-b border-gray-200 text-sm text-gray-500">
-                                <th class="px-6 py-4 font-medium">Nota</th>
-                                <th class="px-6 py-4 font-medium">Pelanggan</th>
-                                <th class="px-6 py-4 font-medium">Status</th>
-                                <th class="px-6 py-4 text-center font-medium">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100 text-sm text-gray-800" id="tableBillingLog">
-                            <tr><td colspan="4" class="px-6 py-8 text-center text-gray-500">Memuat data...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+    <!-- CONTENT GRID -->
+    <div class="flex-1 min-h-0 flex gap-6">
+        <!-- LEFT COLUMN: TABLE -->
+        <div class="flex-1 flex flex-col lf-card p-0 min-w-0">
+            <div class="bg-bgPanel px-4 py-3 border-b border-borderPanel flex items-center gap-2 text-primary shrink-0">
+                <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                <h3 class="font-body text-[13px] font-bold text-textMain">Daftar Tagihan</h3>
+            </div>
+            <div class="overflow-y-auto flex-1 p-0">
+                <table class="w-full text-left">
+                    <thead class="bg-bgPanel sticky top-0 z-10 border-b border-borderPanel">
+                        <tr class="text-[11px] text-textSec font-medium">
+                            <th class="px-4 py-2 w-24">Nota</th>
+                            <th class="px-4 py-2">Pelanggan</th>
+                            <th class="px-4 py-2 w-28">Status</th>
+                            <th class="px-4 py-2 text-right w-20">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-[12px] text-textMain" id="tableBillingLog">
+                        <tr><td colspan="4" class="px-4 py-6 text-center text-textSec text-[11px]">Memuat data...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <div class="col-span-12 lg:col-span-5">
-            <div class="lf-card sticky top-28">
-                <div class="flex items-center gap-2 text-primary font-headline text-xl font-semibold mb-6 border-b border-gray-100 pb-4">
-                    <span class="material-symbols-outlined">sticky_note_2</span> Bukti Nota
-                </div>
+        <!-- RIGHT COLUMN: DETAILS -->
+        <div class="w-80 lf-card flex flex-col shrink-0 p-0 border-l border-borderPanel">
+            <div class="px-5 py-4 border-b border-borderPanel flex items-center gap-2 text-primary font-bold">
+                <span class="material-symbols-outlined text-[18px]">sticky_note_2</span> 
+                <span class="text-[13px] text-textMain">Bukti Nota</span>
+            </div>
 
-                <div id="notesPlaceholder" class="text-center py-10 text-gray-400 text-sm">
+            <div class="flex-1 overflow-y-auto p-5">
+                <div id="notesPlaceholder" class="h-full flex flex-col items-center justify-center text-center text-textSec text-[11px]">
+                    <span class="material-symbols-outlined text-[32px] mb-2 opacity-50">visibility_off</span>
                     Pilih ikon mata pada tabel untuk melihat rincian log.
                 </div>
 
-                <div id="notesContent" class="hidden space-y-6">
-                    <div>
-                        <p class="text-xs font-medium text-gray-500 mb-1">Pelanggan & Kendaraan</p>
-                        <p class="font-bold text-gray-800 text-lg" id="noteCustomer">-</p>
-                        <p class="text-sm text-primary" id="noteVehicle">-</p>
+                <div id="notesContent" class="hidden space-y-4">
+                    <div class="bg-bgHover p-3.5 rounded-lg border border-borderPanel">
+                        <p class="text-[10px] font-medium text-textSec mb-1 uppercase tracking-wider">Pelanggan & Kendaraan</p>
+                        <p class="font-bold text-[14px] text-textMain mb-0.5" id="noteCustomer">-</p>
+                        <p class="text-[11px] text-primary font-mono" id="noteVehicle">-</p>
                     </div>
-                    <div>
-                        <p class="text-xs font-medium text-gray-500 mb-1">Layanan Utama</p>
-                        <div class="bg-[#F3F4F6] p-4 rounded-md border border-gray-200">
-                            <p class="font-bold text-gray-800" id="noteJasa">-</p>
-                        </div>
+                    <div class="bg-bgHover p-3.5 rounded-lg border border-borderPanel">
+                        <p class="text-[10px] font-medium text-textSec mb-1 uppercase tracking-wider">Layanan Utama</p>
+                        <p class="font-bold text-[12px] text-textMain" id="noteJasa">-</p>
                     </div>
-                    <div>
-                        <p class="text-xs font-medium text-gray-500 mb-2">Suku Cadang</p>
-                        <div class="space-y-2 text-sm text-gray-700" id="notePartsList"></div>
+                    <div class="bg-bgHover p-3.5 rounded-lg border border-borderPanel">
+                        <p class="text-[10px] font-medium text-textSec mb-2.5 uppercase tracking-wider">Suku Cadang</p>
+                        <div class="space-y-2 text-[11px] text-textMain" id="notePartsList"></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -76,17 +86,17 @@
             document.getElementById('tableBillingLog').innerHTML = d.recent_logs.map(l => {
                 const shortId = l.id_servis.slice(-6).toUpperCase();
                 return `
-                <tr class="hover:bg-gray-50 transition-colors">
-                    <td class="px-6 py-4 font-mono font-semibold text-primary">#${shortId}</td>
-                    <td class="px-6 py-4"><p class="font-semibold">${l.nama_pelanggan || 'Umum'}</p></td>
-                    <td class="px-6 py-4"><span class="px-3 py-1 bg-[#BBF7D0] text-[#15803D] rounded-pill text-xs font-medium">Selesai</span></td>
-                    <td class="px-6 py-4 text-center">
-                        <button type="button" onclick="showDigitalNotes('${l.id_servis}')" class="text-secondary hover:text-primary transition-colors">
-                            <span class="material-symbols-outlined">visibility</span>
+                <tr class="h-[36px] hover:bg-bgHover border-b border-borderPanel/50 group cursor-pointer" onclick="showDigitalNotes('${l.id_servis}')">
+                    <td class="px-4 font-mono text-[11px] text-primary">#${shortId}</td>
+                    <td class="px-4 font-medium text-textMain">${l.nama_pelanggan || 'Umum'}</td>
+                    <td class="px-4"><span class="priority-chip success">Selesai</span></td>
+                    <td class="px-4 text-right">
+                        <button type="button" class="text-textSec hover:text-primary transition-colors">
+                            <span class="material-symbols-outlined text-[16px]">visibility</span>
                         </button>
                     </td>
                 </tr>`;
-            }).join('') || '<tr><td colspan="4" class="p-6 text-center text-gray-500">Belum ada transaksi</td></tr>';
+            }).join('') || '<tr><td colspan="4" class="p-4 text-center text-[11px] text-textSec">Belum ada transaksi</td></tr>';
         } catch (e) {}
     }
 
@@ -105,10 +115,13 @@
             let partsHtml = "";
             if(d.sparepart && d.sparepart.length > 0) {
                 d.sparepart.forEach(p => {
-                    partsHtml += `<div class="flex justify-between border-b border-gray-100 pb-2"><span>${p.nama_sparepart} (x${p.jumlah})</span><span class="font-mono">Rp ${p.subtotal.toLocaleString('id-ID')}</span></div>`;
+                    partsHtml += `<div class="flex justify-between border-b border-borderPanel pb-1.5 mb-1.5 last:border-0 last:pb-0 last:mb-0">
+                        <span>${p.nama_sparepart} <span class="text-primary font-mono text-[10px] ml-1">x${p.jumlah}</span></span>
+                        <span class="font-mono text-textMain">Rp ${p.subtotal.toLocaleString('id-ID')}</span>
+                    </div>`;
                 });
             } else {
-                partsHtml = `<p class="text-sm text-gray-400 italic">Hanya Jasa Servis</p>`;
+                partsHtml = `<p class="text-[10px] text-textSec italic text-center py-2">Hanya Jasa Servis</p>`;
             }
             document.getElementById('notePartsList').innerHTML = partsHtml;
         } catch (e) {}

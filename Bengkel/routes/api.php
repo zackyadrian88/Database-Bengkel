@@ -18,6 +18,7 @@ Route::post('/servis', [BengkelController::class, 'bukaNota']);
 
 Route::post('/servis/{id_servis}/sparepart', [BengkelController::class, 'pasangSparepart']);
 Route::get('/servis/{id_servis}/tagihan', [BengkelController::class, 'cetakTagihan']);
+Route::get('/cari-riwayat', [BengkelController::class, 'cariRiwayat']);
 
 // ==========================================
 // 3. RUTE GUDANG SPAREPART

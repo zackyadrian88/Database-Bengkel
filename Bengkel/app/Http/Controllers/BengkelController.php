@@ -51,10 +51,35 @@ class BengkelController extends Controller
             }
         }
 
+        $waktuServisMapping = [
+            'Servis Ganti Oli' => 15,
+            'Ganti Oli Gardan' => 15,
+            'Servis CVT' => 30,
+            'Servis Injeksi' => 30,
+            'Servis Ringan' => 45,
+            'Servis Lengkap' => 60,
+            'Bongkar Pasang Ban' => 20,
+            'Ganti Kampas Rem' => 20,
+        ];
+        
+        $totalWaktu = 0;
+        $jumlahServis = $servisHariIni->count();
+        if ($jumlahServis > 0) {
+            foreach ($servisHariIni as $s) {
+                $jenis = $s->jenis_servis ?? 'Lainnya';
+                $waktu = $waktuServisMapping[$jenis] ?? 45; // Default 45 menit
+                $totalWaktu += $waktu;
+            }
+            $rataWaktuServis = (int) ceil($totalWaktu / $jumlahServis);
+        } else {
+            $rataWaktuServis = 45; // Standar default rata-rata
+        }
+
         $stats = [
             'total_nota'         => $servisHariIni->count(),
             'total_pendapatan'   => (int)($totalBiayaJasa + $totalSubtotalParts),
             'part_terpasang'     => (int)$totalPartTerpasang,
+            'rata_waktu_servis'  => $rataWaktuServis,
             'stok_menipis_count' => Sparepart::where('stok', '<=', 5)->count(),
             'stok_menipis_items' => Sparepart::where('stok', '<=', 5)->get()->map(function ($item) {
                 return [
@@ -266,6 +291,22 @@ class BengkelController extends Controller
         ]);
     }
     
+    public function selesaiServis($id_servis)
+    {
+        $s = is_numeric($id_servis) 
+            ? Servis::where('no_nota_simpel', (int) $id_servis)->first() 
+            : Servis::find($id_servis);
+
+        if (!$s) {
+            return response()->json(['pesan' => 'Nota Tidak Ditemukan'], 404);
+        }
+
+        $s->status_servis = 'Selesai';
+        $s->save();
+
+        return response()->json(['pesan' => 'Status berhasil diubah menjadi Selesai']);
+    }
+    
     public function tambahBarang(Request $request)
     {
         Sparepart::create($request->all());
@@ -280,5 +321,89 @@ class BengkelController extends Controller
         }
         $p->increment('stok', $request->tambah_stok);
         return response()->json(['pesan' => 'Sukses']);
+    }
+
+    public function cariRiwayat(Request $request)
+    {
+        $q = $request->q;
+        if (!$q) {
+            return response()->json([]);
+        }
+
+        // Bersihkan spasi dari input dan buat regex yang mengabaikan spasi di DB
+        $qClean = preg_replace('/\s+/', '', $q);
+        $regexPattern = '';
+        foreach (str_split($qClean) as $i => $char) {
+            $regexPattern .= preg_quote($char, '/');
+            if ($i < strlen($qClean) - 1) {
+                $regexPattern .= '\s*';
+            }
+        }
+        $regexStr = '/.*' . $regexPattern . '.*/i';
+
+        // Cari kendaraan dengan nomor_polisi yang cocok (case-insensitive & space-insensitive regex)
+        $kendaraans = Kendaraan::where('nomor_polisi', 'regexp', $regexStr)->get();
+        $ids = $kendaraans->pluck('_id')->toArray();
+
+        // Ambil riwayat servis dari kendaraan-kendaraan tersebut
+        $servis = Servis::whereIn('kendaraan_id', $ids)
+            ->orderBy('created_at', 'desc')
+            ->take(10)
+            ->get()
+            ->map(function ($s) use ($kendaraans) {
+                $k = $kendaraans->firstWhere('_id', $s->kendaraan_id);
+                return [
+                    'no_nota' => $s->no_nota_simpel,
+                    'plat_nomor' => $k ? strtoupper($k->nomor_polisi) : 'Unknown',
+                    'jenis_servis' => $s->jenis_servis,
+                    'status' => $s->status_servis ?? 'Selesai',
+                    'tanggal' => $s->created_at->diffForHumans()
+                ];
+            });
+
+        return response()->json($servis);
+    }
+
+    public function validasiNota(Request $request, $id)
+    {
+        $servis = is_numeric($id) ? Servis::where('no_nota_simpel', (int) $id)->first() : Servis::find($id);
+        if (!$servis) {
+            return response()->json(['pesan' => 'Not Found'], 404);
+        }
+
+        $kendaraan = Kendaraan::find($servis->kendaraan_id);
+        if (!$kendaraan) {
+            return response()->json(['pesan' => 'Not Found'], 404);
+        }
+
+        return response()->json([
+            'nama_pelanggan' => $kendaraan->nama_pelanggan,
+            'plat_nomor' => strtoupper($kendaraan->nomor_polisi)
+        ]);
+    }
+
+    public function antreanAktif()
+    {
+        // Ambil servis hari ini yang statusnya bukan selesai atau servis terbaru
+        $hariIni = today();
+        $servis = Servis::whereDate('created_at', $hariIni)
+            ->orderBy('created_at', 'desc')
+            ->get();
+            
+        $ids = $servis->pluck('kendaraan_id')->toArray();
+        $kendaraans = Kendaraan::whereIn('_id', $ids)->get();
+
+        $data = $servis->map(function ($s) use ($kendaraans) {
+            $k = $kendaraans->firstWhere('_id', $s->kendaraan_id);
+            return [
+                'no_nota' => $s->no_nota_simpel,
+                'nama_pelanggan' => $k ? $k->nama_pelanggan : 'Unknown',
+                'plat_nomor' => $k ? strtoupper($k->nomor_polisi) : 'Unknown',
+                'jenis_servis' => $s->jenis_servis,
+                'status' => $s->status_servis ?? 'Dalam Proses'
+            ];
+        });
+
+        return response()->json($data);
     }
 }
